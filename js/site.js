@@ -67,8 +67,9 @@ if (eye && !reduce) {
 }
 const hangul = '가나다라마바사아자차카타파하검도태권송암승필백학혜기답연마무예마이클스콰이어';
 const scrambleText = (el, target, dur, cb, set = glyphs) => {
-  const t0 = performance.now(), n = Math.max(el.textContent.length, target.length);
+  const t0 = performance.now(), n = Math.max(el.textContent.length, target.length), tok = el._scr = {}; el._txt = target;
   const tick = now => {
+    if (el._scr !== tok) return; // a newer scramble on this element takes over
     const p = Math.min(1, (now - t0) / dur), locked = Math.floor(p * target.length);
     let out = '';
     for (let i = 0; i < (p < .5 ? n : target.length); i++) out += i < locked ? target[i] : set[Math.random() * set.length | 0];
@@ -136,20 +137,22 @@ if (crest) {
 const hero = $('.hero');
 // crest parallax toward pointer
 const logoWrap = $('#logoWrap');
+// shared hero nodes, looked up once
+const heroCrest = $('.hero-crest'), heroInner = $('.hero-inner'), evilEye = $('#evil'), meteorLight = $('#meteorlight'), frontFall = $('#frontfall');
 if (logoWrap && !reduce && fine) {
   const set = (rx, ry, tx, ty, px = 0, py = 0) => { const s = logoWrap.style; s.setProperty('--rx', rx + 'deg'); s.setProperty('--ry', ry + 'deg'); s.setProperty('--tx', tx + 'px'); s.setProperty('--ty', ty + 'px'); s.setProperty('--px', px); s.setProperty('--py', py); };
   logoWrap.addEventListener('pointermove', e => { const r = logoWrap.getBoundingClientRect(); const cx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1), cy = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1); set(cx * 9, -cy * 7, cx * 14, cy * 10, cx, cy); });
   logoWrap.addEventListener('pointerleave', () => set(0, 0, 0, 0));
 }
-// storm: rain + lightning behind the hero while the name is in Hangul
+// storm: a meteor shower + lightning behind the hero while the quotes run
 const stormEl = $('#storm'), bolt = stormEl && stormEl.querySelector('.bolt');
-const crestEl = $('.hero-crest');
+const crestEl = heroCrest;
 let stormSeq = 0;
 const storm = () => {
   if (reduce || !stormEl || !hero) return () => {};
   const sid = ++stormSeq;
   // clear any leftovers from a previous storm before building this one
-  stormEl.querySelectorAll('.drop').forEach(x => x.remove()); const fr0 = $('#frontrain'); if (fr0) fr0.replaceChildren();
+  stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr0 = frontFall; if (fr0) fr0.replaceChildren();
   // three depths: far = thin, short, slow, faint; mid = current; near = thick, long, fast, soft-focus
   const k = innerWidth < 700 ? .5 : 1;
   // meteor shower in three depths: far = faint starlike specks, mid = gold meteors, near = rare bright fireballs.
@@ -159,12 +162,12 @@ const storm = () => {
     { cls: 'mid', n: 16, l: [12, 10], d: [2.2, 1.6], o: [.55, .35] },
     { cls: 'near', n: 4, l: [24, 14], d: [2.6, 1.8], o: [.8, .2] }
   ];
-  const rbox = stormEl.querySelector('.rainbox'), sub = {}; ['far', 'mid', 'near'].forEach(c => sub[c] = rbox && rbox.querySelector('.rb.' + c));
+  const rbox = stormEl.querySelector('.showerbox'), sub = {}; ['far', 'mid', 'near'].forEach(c => sub[c] = rbox && rbox.querySelector('.rb.' + c));
   const frags = { far: document.createDocumentFragment(), mid: document.createDocumentFragment(), near: document.createDocumentFragment() };
-  // each drop respawns at a fresh random x every time it loops, so no fixed rain lanes form
+  // each meteor respawns at a fresh random x every time it loops, so no fixed lanes form
   const reseed = e => { const t = e.currentTarget; t.style.left = (10 + Math.random() * 150) + '%'; };
   layers.forEach(L => { const cnt = Math.round(L.n * k); for (let i = 0; i < cnt; i++) {
-    const d = document.createElement('i'); d.className = 'drop ' + L.cls;
+    const d = document.createElement('i'); d.className = 'shm ' + L.cls;
     d.style.left = (10 + (i + Math.random()) / cnt * 150) + '%';
     d.addEventListener('animationiteration', reseed);
     d.style.setProperty('--l', (L.l[0] + Math.random() * L.l[1]) + 'vh');
@@ -174,35 +177,44 @@ const storm = () => {
     frags[L.cls].appendChild(d);
   } });
   Object.keys(frags).forEach(c => (sub[c] || rbox || stormEl).appendChild(frags[c]));
-  const front = $('#frontrain');
+  const front = frontFall;
   // two giant meteors: the first tears past in front of the crest, the second strikes it
-  const hcrest = $('.hero-crest');
+  const hcrest = heroCrest;
   const impact = (lx, ly, sx, sy, pw = 1) => {
     if (!hcrest) return;
+    const debris = document.createDocumentFragment();
     // crater: molten core that cools orange -> red -> violet, inside a charred ring, kept on the bird
     const mk = c => { const e = document.createElement('i'); e.className = c + (pw > 1 ? ' mega' : ''); e.style.setProperty('--cx', lx.toFixed(1) + '%'); e.style.setProperty('--cy', ly.toFixed(1) + '%'); hcrest.appendChild(e); return e; };
     const ch = mk('crater-char'), ht = mk('crater-hot');
     ch.animate([{ opacity: 0 }, { opacity: 1, offset: .03 }, { opacity: 1, offset: .75 }, { opacity: 0 }], { duration: 6200, easing: 'ease-in', fill: 'forwards' }).onfinish = () => ch.remove();
-    ht.animate([{ opacity: 1, filter: 'brightness(2.2)' }, { opacity: 1, filter: 'brightness(1.4) saturate(1.2)', offset: .12 }, { opacity: .95, filter: 'brightness(1.1) saturate(1.4)', offset: .35 }, { opacity: .75, filter: 'brightness(.85) saturate(1.5) hue-rotate(12deg)', offset: .6 }, { opacity: 0, filter: 'brightness(.6) saturate(1.6) hue-rotate(20deg)' }], { duration: 5400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => ht.remove();
+    ht.animate([{ opacity: 1 }, { opacity: 1, offset: .12 }, { opacity: .9, offset: .35 }, { opacity: .6, offset: .6 }, { opacity: 0 }], { duration: 5400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => ht.remove();
     // sparks burst from the hit and fall
     const hr = hero.getBoundingClientRect(), px = sx - hr.left, py = sy - hr.top;
-    for (let k = 0, n = Math.round((innerWidth < 700 ? 14 : 28) * Math.min(pw, 2)); k < n; k++) { const s = document.createElement('i'); s.className = 'spk'; hero.appendChild(s);
+    for (let k = 0, n = Math.round((innerWidth < 700 ? 14 : 28) * (pw > 1 ? 1.35 : 1)); k < n; k++) { const s = document.createElement('i'); s.className = 'spk'; debris.appendChild(s);
       const ang = -Math.PI / 2 + (Math.random() - .5) * 3, v = (60 + Math.random() * 190) * (pw > 1 ? 1.7 : 1), ex = Math.cos(ang) * v, ey = Math.sin(ang) * v;
       s.animate([{ transform: `translate(${px}px,${py}px) scale(1)`, opacity: 1 }, { transform: `translate(${px + ex * .7}px,${py + ey * .7}px) scale(.8)`, opacity: 1, offset: .45 }, { transform: `translate(${px + ex}px,${py + ey + 70 + Math.random() * 60}px) scale(.3)`, opacity: 0 }], { duration: 650 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.5,1)', fill: 'forwards' }).onfinish = () => s.remove(); }
     // chunks of the crest blast off, spinning
-    for (let k = 0, n = Math.round((innerWidth < 700 ? 6 : 12) * Math.min(pw, 2)); k < n; k++) { const s = document.createElement('i'); s.className = 'shard'; hero.appendChild(s);
+    for (let k = 0, n = Math.round((innerWidth < 700 ? 6 : 12) * (pw > 1 ? 1.35 : 1)); k < n; k++) { const s = document.createElement('i'); s.className = 'shard'; debris.appendChild(s);
       const ang = -Math.PI / 2 + (Math.random() - .5) * 2.4, v = (70 + Math.random() * 150) * (pw > 1 ? 1.7 : 1), ex = Math.cos(ang) * v, ey = Math.sin(ang) * v, rot = (Math.random() - .5) * 900, sc = .7 + Math.random() * 1.4;
       s.animate([{ transform: `translate(${px}px,${py}px) rotate(0deg) scale(${sc})`, opacity: 1 }, { transform: `translate(${px + ex * .75}px,${py + ey * .75}px) rotate(${rot * .5}deg) scale(${sc})`, opacity: 1, offset: .4 }, { transform: `translate(${px + ex * 1.1}px,${py + ey + 160 + Math.random() * 80}px) rotate(${rot}deg) scale(${sc * .8})`, opacity: 0 }], { duration: 1000 + Math.random() * 600, easing: 'cubic-bezier(.2,.6,.5,1)', fill: 'forwards' }).onfinish = () => s.remove(); }
     // smoke rolls up out of the crater
-    for (let k = 0; k < 5 * Math.min(pw, 2); k++) { const s = document.createElement('i'); s.className = 'smoke' + (pw > 1 ? ' mega' : ''); hero.appendChild(s); const dx = (Math.random() - .5) * 50;
+    for (let k = 0; k < (pw > 1 ? 6 : 5); k++) { const s = document.createElement('i'); s.className = 'smoke' + (pw > 1 ? ' mega' : ''); debris.appendChild(s); const dx = (Math.random() - .5) * 50;
       s.animate([{ transform: `translate(${px}px,${py}px) scale(.3)`, opacity: 0 }, { opacity: .9, offset: .15 }, { transform: `translate(${px + dx}px,${py - 90 - Math.random() * 60}px) scale(${2 + Math.random() * 1.5})`, opacity: 0 }], { duration: 2200 + Math.random() * 1000, delay: k * 120, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'both' }).onfinish = () => s.remove(); }
+    hero.appendChild(debris);
     // a searing flash, the whole hero is rocked, and the crest is knocked back hard
     const fl = document.createElement('i'); fl.className = 'iflash'; fl.style.setProperty('--fx', px + 'px'); fl.style.setProperty('--fy', py + 'px'); hero.appendChild(fl);
     fl.animate([{ opacity: 0 }, { opacity: 1, offset: .06 }, { opacity: .4, offset: .25 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }).onfinish = () => fl.remove();
-    const hi = $('.hero-inner'); if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-14px 10px' }, { translate: '12px -9px' }, { translate: '-10px 6px' }, { translate: '8px -5px' }, { translate: '-5px 3px' }, { translate: '3px -2px' }, { translate: '0 0' }], { duration: 560, easing: 'linear' });
+    const hi = heroInner; if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-14px 10px' }, { translate: '12px -9px' }, { translate: '-10px 6px' }, { translate: '8px -5px' }, { translate: '-5px 3px' }, { translate: '3px -2px' }, { translate: '0 0' }], { duration: 560, easing: 'linear' });
     hcrest.animate([{ rotate: '0deg', scale: '1' }, { rotate: '-8deg', scale: '.9', offset: .1 }, { rotate: '3.5deg', scale: '1.02', offset: .32 }, { rotate: '-1.6deg', scale: '.99', offset: .55 }, { rotate: '.6deg', offset: .78 }, { rotate: '0deg', scale: '1' }], { duration: 1100, easing: 'ease-out' });
-    const evq = $('#evil'); if (evq) { restart(evq, 'flare'); setTimeout(() => evq.classList.remove('flare'), 700); }
+    const evq = evilEye; if (evq) { restart(evq, 'flare'); setTimeout(() => evq.classList.remove('flare'), 700); }
     if (pw > 1) {
+      // reality glitches: the scene tears into shifted slices, colours split, the text jumps, then it snaps back
+      if (!reduce) { restart(hero, 'glitch'); clearTimeout(hero._gl); hero._gl = setTimeout(() => hero.classList.remove('glitch'), 1100);
+        const hw = $('.hero h1'); if (hw) hw.querySelectorAll('.w').forEach((w, i) => { const t = w._txt || w.textContent; scrambleText(w, t, 700 + i * 200); });
+        // stepped jumps layered on top (composite add), so the elements' own entrance animations are never replaced or replayed
+        const J = [['-10px 2px', '12deg'], ['14px -1px', '-6deg'], ['0 0', '0deg'], ['-6px 0', '4deg'], ['8px 1px', '0deg'], ['0 0', '0deg'], ['-3px 0', '-3deg'], ['0 0', '0deg']], O = [0, .1, .2, .3, .4, .55, .65, .8];
+        const jf = J.map(([t, k], i) => ({ translate: t, transform: 'skewX(' + k + ')', offset: O[i], easing: 'steps(1)' })); jf.push({ translate: '0 0', transform: 'skewX(0deg)', offset: 1 });
+        ['.hero h1', '.hero-sub', '.hero-actions'].forEach((q, i) => { const e = $(q); if (e && e.animate) e.animate(jf, { duration: 950, delay: i * 50, composite: 'add' }); }); }
       // the whole emblem goes white-hot purple, then cools
       const hg = document.createElement('i'); hg.className = 'hotglow'; hg.innerHTML = '<i></i>'; hg.firstChild.style.setProperty('--cx', lx.toFixed(1) + '%'); hg.firstChild.style.setProperty('--cy', ly.toFixed(1) + '%'); hcrest.appendChild(hg);
       hg.animate([{ opacity: 0 }, { opacity: 1, offset: .06 }, { opacity: .95, offset: .3 }, { opacity: .6, offset: .6 }, { opacity: 0 }], { duration: 4200, easing: 'ease-out', fill: 'forwards' }).onfinish = () => hg.remove();
@@ -210,14 +222,14 @@ const storm = () => {
       fl.style.setProperty('--fx', px + 'px'); const wo = document.createElement('i'); wo.className = 'whiteout'; hero.appendChild(wo);
       wo.animate([{ opacity: 0 }, { opacity: 1, offset: .05 }, { opacity: .85, offset: .2 }, { opacity: 0 }], { duration: 1500, easing: 'ease-out' }).onfinish = () => wo.remove();
       // a gold ring leads the violet shockwave
-      const R = Math.hypot(hr.width, hr.height) / 20, gs = document.createElement('i'); gs.className = 'shock gold'; hero.appendChild(gs);
-      gs.animate([{ transform: `translate(${px}px,${py}px) scale(.1)`, opacity: 1, borderWidth: '18px' }, { opacity: 1, offset: .15 }, { transform: `translate(${px}px,${py}px) scale(${R * 1.3})`, opacity: 0, borderWidth: '2px' }], { duration: 800, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => gs.remove();
-      const sh = document.createElement('i'); sh.className = 'shock'; hero.appendChild(sh);
-      sh.animate([{ transform: `translate(${px}px,${py}px) scale(.1)`, opacity: 1, borderWidth: '14px' }, { opacity: 1, offset: .2 }, { transform: `translate(${px}px,${py}px) scale(${R * 1.2})`, opacity: 0, borderWidth: '1px' }], { duration: 1200, delay: 120, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove();
+      const R = Math.hypot(hr.width, hr.height) / 20, gs = document.createElement('i'); gs.className = 'shock gold'; const ring = (el, S, bw) => { el.style.width = el.style.height = 40 * S + 'px'; el.style.margin = -20 * S + 'px'; el.style.borderWidth = bw + 'px'; return .1 / S; }; const g0 = ring(gs, R * 1.3, 3); hero.appendChild(gs);
+      gs.animate([{ transform: `translate(${px}px,${py}px) scale(${g0})`, opacity: 1 }, { opacity: 1, offset: .15 }, { transform: `translate(${px}px,${py}px) scale(1)`, opacity: 0 }], { duration: 800, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => gs.remove();
+      const sh = document.createElement('i'); sh.className = 'shock'; const s0 = ring(sh, R * 1.2, 2); hero.appendChild(sh);
+      sh.animate([{ transform: `translate(${px}px,${py}px) scale(${s0})`, opacity: 1 }, { opacity: 1, offset: .2 }, { transform: `translate(${px}px,${py}px) scale(1)`, opacity: 0 }], { duration: 1200, delay: 120, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove();
       if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-26px 18px' }, { translate: '22px -16px' }, { translate: '-18px 12px' }, { translate: '15px -10px' }, { translate: '-11px 7px' }, { translate: '8px -5px' }, { translate: '-5px 3px' }, { translate: '0 0' }], { duration: 1100, easing: 'linear' });
       hcrest.animate([{ rotate: '0deg', scale: '1' }, { rotate: '-14deg', scale: '.84', offset: .1 }, { rotate: '6deg', scale: '1.03', offset: .3 }, { rotate: '-3deg', scale: '.98', offset: .52 }, { rotate: '1.2deg', offset: .75 }, { rotate: '0deg', scale: '1' }], { duration: 1500, easing: 'ease-out' });
     }
-    const ml = $('#meteorlight'); if (ml) { ml.style.setProperty('--mlx', lx + '%'); ml.style.setProperty('--mly', ly + '%'); ml.animate([{ opacity: 1, filter: 'brightness(1.8)' }, { opacity: 0, filter: 'brightness(1)' }], { duration: 900, easing: 'ease-out' }); }
+    const ml = meteorLight; if (ml) { ml.style.setProperty('--mlx', lx + '%'); ml.style.setProperty('--mly', ly + '%'); ml.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }); }
   };
   const launchBig = (wait, strike, onHit, mega) => {
     if (!front) return;
@@ -241,7 +253,7 @@ const storm = () => {
       const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh;
       const off = (tx - h0.left) - (ty - h0.top) * dx / dy;
       if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px'; }
-    const ml = $('#meteorlight'), anim = b.getAnimations && b.getAnimations()[0];
+    const ml = meteorLight, anim = b.getAnimations && b.getAnimations()[0];
     if (!anim || !crestEl) return;
     let hit = false, fno = 0, crc = null;
     const tick = () => {
@@ -292,24 +304,28 @@ const storm = () => {
     g.animate([{ opacity: 1 }, { opacity: .15, offset: .15 }, { opacity: .95, offset: .25 }, { opacity: .1, offset: .45 }, { opacity: .5, offset: .55 }, { opacity: 0 }], { duration: 560, easing: 'linear', fill: 'forwards' }).onfinish = () => g.remove();
     return main;
   };
-  const evil = $('#evil');
+  const evil = evilEye;
+  let lastFlash = 0;
   const flash = () => {
+    const nowF = performance.now(); if (nowF - lastFlash < 180) return; lastFlash = nowF; // overlapping bolts cost frames and read as one anyway
     const sr = stormEl.getBoundingClientRect(), cr0 = (crestEl || hero).getBoundingClientRect();
     AR = sr.height / (sr.width || 1);
     const ox = ((cr0.left + cr0.width * (.42 + Math.random() * .16)) - sr.left) / sr.width * 100, oy = ((cr0.top + cr0.height * (.4 + Math.random() * .15)) - sr.top) / sr.height * 100;
     const bx = ox;
     if (evil) { restart(evil, 'flare'); setTimeout(() => evil.classList.remove('flare'), 700); }
     setTimeout(() => {
-    bolt.style.setProperty('--bx', bx + '%'); restart(bolt, 'flash');
-    const hz = $('#horizon'); if (hz) restart(hz, 'lit');
+    const rs = []; // [el, class] pairs restarted together after all reads/writes
+    bolt.style.setProperty('--bx', bx + '%'); rs.push([bolt, 'flash']);
+    const hz = $('#horizon'); if (hz) rs.push([hz, 'lit']);
     const path = drawBolt(ox, oy) || [[ox, oy]];
     const [ex, ey] = path[path.length - 1];
     // stars peek through a soft seam that follows the whole bolt, widest near the top and tapering down
     const rift = $('#rift');
     if (rift) {
-      const n = path.length, m = path.map(([x, y], i) => { const t = i / Math.max(1, n - 1), w = (6.5 - t * 3.5).toFixed(2), hh = (5 - t * 1.5).toFixed(2); return `radial-gradient(ellipse ${w}% ${hh}% at ${(x + (Math.random() - .5) * 1.5).toFixed(2)}% ${Math.max(0, y).toFixed(2)}%,#000 0 25%,transparent 100%)`; }).join(',');
+      const st = Math.max(1, Math.ceil(path.length / 10)), pts = path.filter((_, i) => i % st === 0 || i === path.length - 1); // ≤ ~11 mask gradients
+      const n = pts.length, m = pts.map(([x, y], i) => { const t = i / Math.max(1, n - 1), w = (6.5 - t * 3.5).toFixed(2), hh = (5 - t * 1.5).toFixed(2); return `radial-gradient(ellipse ${w}% ${hh}% at ${(x + (Math.random() - .5) * 1.5).toFixed(2)}% ${Math.max(0, y).toFixed(2)}%,#000 0 25%,transparent 100%)`; }).join(',');
       rift.style.webkitMaskImage = m; rift.style.maskImage = m;
-      rift.style.setProperty('--bx', bx + '%'); restart(rift, 'open');
+      rift.style.setProperty('--bx', bx + '%'); rs.push([rift, 'open']);
     }
     if (rim && crestEl) {
       const hr = hero.getBoundingClientRect(), cr = crestEl.getBoundingClientRect();
@@ -317,41 +333,77 @@ const storm = () => {
       const dx = px - cx, dy = py - cy, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
       rim.style.setProperty('--lx', (50 + ux * 42) + '%'); rim.style.setProperty('--ly', (50 + uy * 42) + '%');
       rim.style.setProperty('--la', (Math.atan2(-ux, uy) * 180 / Math.PI) + 'deg');
-      restart(rim, 'flash');
+      rs.push([rim, 'flash']);
     }
-    if (h1) restart(h1, 'lit');
+    if (h1) rs.push([h1, 'lit']);
     // the purple glow behind the crest surges with each strike, then falls back into its slow pulse
-    const dp = $('#darkPulse'); if (dp) { restart(dp, 'surge'); clearTimeout(dp._z); dp._z = setTimeout(() => dp.classList.remove('surge'), 950); }
+    const dp = $('#darkPulse'); if (dp) { rs.push([dp, 'surge']); clearTimeout(dp._z); dp._z = setTimeout(() => dp.classList.remove('surge'), 950); }
+    rs.forEach(([e, c]) => e.classList.remove(c)); void hero.offsetWidth; rs.forEach(([e, c]) => e.classList.add(c));
     }, 140);
   };
   const ts = [500, 2000, 3500, 5000, 6300, 7400].map(t => setTimeout(flash, t + Math.random() * 400));
   const stopper = () => { ts.forEach(clearTimeout); hero.classList.remove('storming');
-    setTimeout(() => { if (!hero.classList.contains('storming')) document.querySelectorAll('#frontrain .bigm').forEach(x => x.remove()); }, 950);
-    const ml0 = $('#meteorlight'); if (ml0) { ml0.style.opacity = 0; ml0._o = 0; }
+    setTimeout(() => { if (!hero.classList.contains('storming')) document.querySelectorAll('#frontfall .bigm').forEach(x => x.remove()); }, 950);
+    const ml0 = meteorLight; if (ml0) { ml0.style.opacity = 0; ml0._o = 0; }
     if (hcrest) hcrest.querySelectorAll('.crater-char,.crater-hot,.hotglow').forEach(x => { x.getAnimations().forEach(a => a.pause()); const o = getComputedStyle(x).opacity; x.getAnimations().forEach(a => a.cancel()); x.animate([{ opacity: o }, { opacity: 0 }], { duration: 1800, easing: 'ease-in', fill: 'forwards' }).onfinish = () => x.remove(); });
-    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.drop').forEach(x => x.remove()); const fr = $('#frontrain'); if (fr) fr.replaceChildren(); }, 1000); };
-  // clicking the bird mid-storm feeds it: more lightning, and sometimes another meteor
-  // extension time: more lightning, and every ~3.5s of it a regular meteor streaks past (only the finale strikes)
+    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr = frontFall; if (fr) fr.replaceChildren(); }, 1000); };
+    // extension time: more lightning, and every ~3.5s of it a regular meteor streaks past (only the finale strikes)
   // passing meteors ride a fixed schedule through the added time (one every ~3.5s), so rapid clicks never bunch them up
   const t0 = performance.now(); let nextPass = 8500;
-  stopper.more = (ms, from = 0) => {
-    for (let t = 250; t < ms; t += 1100 + Math.random() * 700) ts.push(setTimeout(flash, from + t));
+  // lvl = clicks so far: each click packs the lightning tighter and throws that many extra bolts right away
+  stopper.more = (ms, from = 0, lvl = 1) => {
+    const g = Math.max(.4, 1 - .15 * lvl);
+    for (let t = 250; t < ms; t += (1100 + Math.random() * 700) * g) ts.push(setTimeout(flash, from + t));
+    for (let k = 0; k < lvl; k++) ts.push(setTimeout(flash, 120 + k * (2400 / lvl) + Math.random() * 200));
     const now = performance.now() - t0, end = now + from + ms;
-    while (nextPass < end - 8000) { const at = Math.max(nextPass, now + 400) + (Math.random() - .5) * 400; ts.push(setTimeout(() => launchBig(0, false), at - now)); nextPass += 3500; }
+    while (nextPass < end - 2500) { const at = Math.max(nextPass, now + 400) + (Math.random() - .5) * 400; ts.push(setTimeout(() => launchBig(0, false), at - now)); nextPass += 3500; }
   };
-  // the finale: a colossal meteor whose strike ends the storm
-  // the finale: the lightning goes frantic as the colossal meteor comes in
-  stopper.finale = onHit => { for (let t = 0; t < 2600; t += 380 + Math.random() * 260) ts.push(setTimeout(flash, t)); launchBig(.05, true, onHit, true); };
+  // the finale: the lightning goes frantic as the colossal meteor comes in; its strike hurls the emblem back, and it springs home
+  stopper.finale = onHit => { for (let t = 0; t < 2600; t += 380 + Math.random() * 260) ts.push(setTimeout(flash, t));
+    launchBig(.05, true, () => {
+      if (logoWrap && !reduce && logoWrap.animate) logoWrap.animate([
+        { translate: '0 0', scale: '1' },
+        { translate: '-70px 62px', scale: '.72', offset: .12, easing: 'cubic-bezier(.2,.6,.3,1)' },
+        { translate: '-76px 68px', scale: '.7', offset: .3, easing: 'cubic-bezier(.5,0,.3,1)' },
+        { translate: '12px -10px', scale: '1.06', offset: .58 },
+        { translate: '-5px 4px', scale: '.98', offset: .74 },
+        { translate: '2px -1px', scale: '1.01', offset: .87 },
+        { translate: '0 0', scale: '1' }
+      ], { duration: 2200, easing: 'ease-out', composite: 'add' });
+      onHit();
+    }, true); };
   return stopper;
 };
-// crest click: name scrambles into Hangul and back
+// crest click: four clicks of rising anger, the fifth summons the storm; the name becomes the tenets quotes and back
 if (logoWrap) {
-  const h1 = $('.hero h1'), ws = h1 ? h1.querySelectorAll('.w') : [];
+  const h1 = $('.hero h1'), ws = h1 ? h1.querySelectorAll('.w') : [], NAME = [...ws].map(w => w.textContent);
   let busy = false;
   // four clicks of rising anger, then the fifth makes it snap. stop clicking and it cools off.
   const LEVELS = 4;
-  let anger = 0, calmT = 0, stormEndT = 0, stormEndFn = null, stormEndAt = 0, stormCtl = null, finaleSet = false;
-  const MAXX = 10000;
+  let anger = 0, calmT = 0, stormEndT = 0, stormEndFn = null, stormEndAt = 0, stormCtl = null, finaleSet = false, stormFeeds = 0;
+  // storm timeline. base 7s once the name has turned; each click adds EXT (never more than MAX_AHEAD left on the clock).
+  // the FEEDS-th click locks it: no more extension, and the colossal meteor is timed to strike when the clock runs out.
+  const EXT = 3000, MAX_AHEAD = 14000, FEEDS = 5, HIT_LEAD = 1500, MIN_WAIT = 3500;
+  const setEnd = at => { const now = performance.now(); stormEndAt = at; clearTimeout(stormEndT); if (stormEndFn) stormEndT = setTimeout(stormEndFn, Math.max(0, at - now)); };
+  // each click: the room darkens a step, the eye burns hotter (violet toward white), and the name glitches, longer each time
+  // the storm speaks in the five tenets (예의 염치 인내 극기 백절불굴), each one breaking; the last click: one strike, certain death
+  const QUOTES = [['예의는 끝났다', 'Courtesy ends here.'], ['염치가 시험받는다', 'Integrity is tested.'], ['인내는 너보다 길다', 'Perseverance outlasts you.'], ['극기는 사라졌다', 'Self-control is gone.'], ['백절불굴이 깨어난다', 'The indomitable spirit wakes.'], ['일격필살', 'One strike. Certain death.']];
+  const showQuote = (i, d = 700) => { const q = QUOTES[Math.min(i, QUOTES.length - 1)];
+    h1.classList.toggle('final', i >= QUOTES.length - 1); scrambleText(ws[0], q[0], d * .8, null, hangul); scrambleText(ws[1], q[1], d); };
+  const feedFx = lvl => {
+    const ev = evilEye; if (ev) ev.style.setProperty('--feed', (lvl / FEEDS).toFixed(2));
+    // not while the first quote is still forming: that scramble's callback starts the storm clock (and catches up on early clicks)
+    if (stormEndFn && h1 && ws.length === 2) showQuote(lvl, lvl >= FEEDS ? 1000 : 650);
+  };
+  const feedStorm = () => {
+    if (finaleSet || !stormCtl) return;
+    const now = performance.now(), oldEnd = stormEndAt || now + 7000, newEnd = Math.min(Math.max(oldEnd, now) + EXT, now + MAX_AHEAD);
+    feedFx(++stormFeeds); if (stormFeeds < FEEDS) { if (newEnd > oldEnd) { setEnd(newEnd); } if (stormCtl.more) stormCtl.more(Math.max(0, newEnd - oldEnd), Math.max(0, oldEnd - now), stormFeeds); return; }
+    finaleSet = true; const ctl = stormCtl, launch = Math.max(newEnd - HIT_LEAD, now + MIN_WAIT) - now;
+    if (ctl.more) ctl.more(Math.max(0, newEnd - oldEnd), Math.max(0, oldEnd - now), FEEDS);
+    setEnd(now + launch + 6000); // fallback if the hit is never registered (e.g. tab hidden)
+    setTimeout(() => { if (stormCtl !== ctl) return; ctl.finale(() => setEnd(performance.now() + 1100)); }, launch);
+  };
   // at full fury the lights stutter: rapid, random, drastic flicker of the scene
   let flickT = 0;
   const bgEl = $('.hero-bg');
@@ -379,26 +431,19 @@ if (logoWrap) {
   };
   const setAnger = n => { anger = n; if (!hero) return; flicker(n >= LEVELS && !reduce); dust(n >= LEVELS && !reduce); hero.classList.toggle('furious', n >= LEVELS); hero.style.setProperty('--ang', (n / LEVELS).toFixed(3)); hero.classList.toggle('annoyed', n > 0); hero.classList.toggle('glinting', n >= 2); };
   const calm = () => setAnger(0);
-  const hcr = $('.hero-crest');
+  const hcr = heroCrest;
   logoWrap.addEventListener('dragstart', e => e.preventDefault());
   logoWrap.addEventListener('mousedown', e => { if (e.detail > 1) e.preventDefault(); }); // no double-click selection flash
   if (ws.length === 2) logoWrap.addEventListener('click', () => {
     if (busy) {
-      // mid-storm: each click extends the storm (up to ~15s ahead) and the eye flares in answer
-      if (stormEndFn && hero && hero.classList.contains('storming')) {
+      // mid-storm: each click feeds the storm (more time, denser lightning, the next quote); the 5th calls the finale
+      if (stormCtl && hero && hero.classList.contains('storming')) {
         // the bird always answers a click: it swells with power and the violet glow behind it surges
         if (!reduce) {
           if (hcr) hcr.animate([{ scale: '1', rotate: '0deg' }, { scale: '1.09', rotate: '-1.5deg', offset: .18 }, { scale: '.98', rotate: '1deg', offset: .45 }, { scale: '1.02', offset: .7 }, { scale: '1', rotate: '0deg' }], { duration: 650, easing: 'ease-out' });
           const dp = $('#darkPulse'); if (dp) { restart(dp, 'surge'); clearTimeout(dp._z); dp._z = setTimeout(() => dp.classList.remove('surge'), 950); }
         }
-        if (finaleSet) return; // fully fed: no more extension, the finale is coming
-        const now = performance.now(), oldEnd = stormEndAt, newEnd = Math.min(Math.max(oldEnd, now) + 3200, now + MAXX);
-        if (newEnd > oldEnd) { clearTimeout(stormEndT); stormEndAt = newEnd; stormEndT = setTimeout(stormEndFn, newEnd - now); if (stormCtl && stormCtl.more) stormCtl.more(newEnd - oldEnd, Math.max(0, oldEnd - now)); }
-        // fed all the way: a colossal meteor arrives near the end and its strike ends the storm
-        if (newEnd >= now + MAXX - 1 && stormCtl && stormCtl.finale) {
-          finaleSet = true; const ctl = stormCtl;
-          setTimeout(() => { if (stormCtl !== ctl) return; ctl.finale(() => { clearTimeout(stormEndT); stormEndT = setTimeout(() => stormEndFn && stormEndFn(), 1100); }); }, Math.max(0, newEnd - now - 2600));
-        }
+        feedStorm();
       }
       return;
     }
@@ -408,8 +453,13 @@ if (logoWrap) {
       // each shake is harder and longer than the last
       if (hcr) hcr.animate([{ rotate: '0deg', scale: '1' }, { rotate: -r + 'deg', scale: String(sc), offset: .12 }, { rotate: r * .9 + 'deg', offset: .27 }, { rotate: -r * .65 + 'deg', offset: .44 }, { rotate: r * .4 + 'deg', offset: .62 }, { rotate: -r * .18 + 'deg', offset: .8 }, { rotate: '0deg', scale: '1' }], { duration: 420 + k * 520, easing: 'ease-out' });
       // the whole hero flinches with it, harder each time
-      const hi = $('.hero-inner'), j = 2 + k * 7; if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: -j + 'px ' + j * .6 + 'px' }, { translate: j * .8 + 'px ' + -j * .5 + 'px' }, { translate: -j * .5 + 'px ' + j * .3 + 'px' }, { translate: '0 0' }], { duration: 260 + k * 160, easing: 'linear' });
+      const hi = heroInner, j = 2 + k * 7; if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: -j + 'px ' + j * .6 + 'px' }, { translate: j * .8 + 'px ' + -j * .5 + 'px' }, { translate: -j * .5 + 'px ' + j * .3 + 'px' }, { translate: '0 0' }], { duration: 260 + k * 160, easing: 'linear' });
       if (anger >= 2 && h1) h1.animate([{ opacity: 1 }, { opacity: .3 }, { opacity: 1 }, { opacity: .55 }, { opacity: 1 }], { duration: 420, delay: 120 });
+      // 4th click: the name glitches, a small taste of what's coming (short slice jumps + colour split, then it reassembles)
+      if (anger === LEVELS && h1 && !reduce) {
+        h1.animate([{ translate: '-6px 1px', transform: 'skewX(8deg)', textShadow: '-3px 0 rgba(255,40,190,.8),3px 0 rgba(0,235,255,.8)', easing: 'steps(1)' }, { translate: '7px 0', transform: 'skewX(-4deg)', offset: .18, easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .32, easing: 'steps(1)' }, { translate: '-3px 0', transform: 'skewX(3deg)', textShadow: '-2px 0 rgba(255,40,190,.7),2px 0 rgba(0,235,255,.7)', offset: .5, easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .66 }, { translate: '0 0', transform: 'none', textShadow: 'none' }], { duration: 520, delay: 90, composite: 'add' });
+        ws.forEach((w, i) => setTimeout(() => scrambleText(w, NAME[i], 380 + i * 90), 90));
+      }
       calmT = setTimeout(calm, 3800 + anger * 500);
       return;
     }
@@ -418,10 +468,19 @@ if (logoWrap) {
     if (anger) { setAnger(LEVELS); flicker(false); dust(false); hero.classList.remove('furious'); } // stay furious-looking through the glare; released when the storm breaks
     busy = true;
     if (snapped) {
+      // 5th click: the name breaks up hard. longer, wider jumps, a heavier colour split, flicker and a double scramble through Hangul
+      if (h1 && !reduce) {
+        const G = ['rgba(255,40,190,.9)', 'rgba(0,235,255,.9)'], sp = d => `-${d}px 0 ${G[0]},${d}px 0 ${G[1]}`, f = [];
+        [[-14, 2, 14, 6], [18, -2, -8, 8], [0, 0, 0, 0], [-22, 1, 18, 10], [9, 0, -5, 4], [-6, -2, 6, 7], [0, 0, 0, 0], [24, 1, -14, 9], [-11, 0, 8, 5], [4, 0, -3, 3], [0, 0, 0, 0], [-7, 0, 5, 4], [0, 0, 0, 0]]
+          .forEach(([x, y, k, d], i, A) => f.push({ translate: x + 'px ' + y + 'px', transform: 'skewX(' + k + 'deg)', textShadow: d ? sp(d) : 'none', opacity: d > 7 ? .55 : 1, offset: i / (A.length - 1) * .92, easing: 'steps(1)' }));
+        f.push({ translate: '0 0', transform: 'none', textShadow: 'none', opacity: 1 });
+        h1.animate(f, { duration: 1100, delay: 60, composite: 'add' });
+        ws.forEach((w, i) => { const t = NAME[i]; setTimeout(() => scrambleText(w, t, 420 + i * 80, () => setTimeout(() => { if (!h1.classList.contains('quote')) scrambleText(w, t, 380 + i * 100, null, hangul); }, 90), hangul), 60); });
+      }
       // the glint flares into a sharp violet star, then goes out
       hero.classList.add('glintflare'); setTimeout(() => { hero.classList.remove('glintflare', 'glinting'); }, 750);
       // the lights go haywire, harder and faster than ever, then everything sinks into the dark
-      const hi = $('.hero-inner'), t0 = performance.now();
+      const hi = heroInner, t0 = performance.now();
       const haywire = () => {
         const t = performance.now() - t0, r = Math.random();
         if (t > 1100) { if (bgEl) bgEl.style.opacity = ''; if (hi) hi.style.filter = ''; hero.classList.add('darkened'); return; }
@@ -442,7 +501,7 @@ if (logoWrap) {
     if (hero && !reduce) {
       hero.classList.add('summoning');
       // violet motes drift in from the edges, speeding up, and are swallowed by the eye as it ignites
-      const ev = $('#evil'), hr = hero.getBoundingClientRect();
+      const ev = evilEye, hr = hero.getBoundingClientRect();
       if (ev) { const er = ev.getBoundingClientRect(), ex = er.left + er.width / 2 - hr.left, ey = er.top + er.height / 2 - hr.top, n = innerWidth < 700 ? 9 : 16;
         for (let k = 0; k < n; k++) {
           const m = document.createElement('i'); m.className = 'mote'; hero.appendChild(m);
@@ -465,7 +524,7 @@ if (logoWrap) {
     setTimeout(() => {
       if (!hero) return;
       if (eye) eye.classList.remove('heavy');
-      const pf = $('#pflash'), ev = $('#evil');
+      const pf = $('#pflash'), ev = evilEye;
       if (pf && ev && !reduce) {
         const hr = hero.getBoundingClientRect(), er = ev.getBoundingClientRect();
         pf.style.setProperty('--fx', (er.left + er.width / 2 - hr.left) + 'px'); pf.style.setProperty('--fy', (er.top + er.height / 2 - hr.top) + 'px');
@@ -473,20 +532,20 @@ if (logoWrap) {
         // shockwave: a ring blasts outward from the eye
         const sx = er.left + er.width / 2 - hr.left, sy = er.top + er.height / 2 - hr.top, R = Math.hypot(Math.max(sx, hr.width - sx), Math.max(sy, hr.height - sy)) / 20;
         const sh = document.createElement('i'); sh.className = 'shock'; hero.appendChild(sh);
-        sh.animate([{ transform: `translate(${sx}px,${sy}px) scale(.1)`, opacity: 1, borderWidth: '10px' }, { opacity: 1, offset: .2 }, { transform: `translate(${sx}px,${sy}px) scale(${R * 1.15})`, opacity: 0, borderWidth: '1px' }], { duration: 780, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove();
+        sh.animate([{ transform: `translate(${sx}px,${sy}px) scale(.1)`, opacity: 1, borderWidth: '10px' }, { opacity: 1, offset: .2 }, { transform: `translate(${sx}px,${sy}px) scale(${R * 1.15})`, opacity: 0 }], { duration: 780, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove();
         // the blast jolts the whole hero
-        const hi = $('.hero-inner'); if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-9px 6px' }, { translate: '8px -7px' }, { translate: '-6px -4px' }, { translate: '5px 5px' }, { translate: '-3px 2px' }, { translate: '0 0' }], { duration: 420, easing: 'linear' });
+        const hi = heroInner; if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-9px 6px' }, { translate: '8px -7px' }, { translate: '-6px -4px' }, { translate: '5px 5px' }, { translate: '-3px 2px' }, { translate: '0 0' }], { duration: 420, easing: 'linear' });
       }
       hero.classList.remove('summoning', 'igniting', 'darkened');
     }, lidOpen - 60);
     setTimeout(() => {
-    const endStorm = storm(); stormCtl = endStorm;
+    stormEndAt = 0; stormFeeds = 0; finaleSet = false; const endStorm = storm(); stormCtl = endStorm;
     ws.forEach(w => { w.style.animation = 'none'; w.style.opacity = 1; w.style.transform = 'none'; });
     h1.style.minHeight = h1.offsetHeight + 'px'; // lock height so the crest doesn't shift when the name swaps
-    h1.classList.add('ko');
-    scrambleText(ws[0], '마이클', 900, null, hangul);
-    scrambleText(ws[1], '스콰이어스', 1200, () => { stormEndFn = () => {
-      stormEndFn = null; stormCtl = null; finaleSet = false;
+    h1.classList.add('quote', 'ko');
+    scrambleText(ws[0], QUOTES[0][0], 900, null, hangul);
+    scrambleText(ws[1], QUOTES[0][1], 1200, () => { stormEndFn = () => {
+      stormEndFn = null; stormCtl = null; finaleSet = false; stormFeeds = 0; stormEndAt = 0; { const ev = evilEye; if (ev) ev.style.removeProperty('--feed'); }
       endStorm();
       // starburst fades out on its own, then the bird blinks a few times as it comes to
       setTimeout(() => {
@@ -501,9 +560,9 @@ if (logoWrap) {
         }
         setTimeout(() => hero.classList.remove('waking'), reduce ? 0 : 3800);
       }, 600);
-      scrambleText(ws[0], 'Michael', 900, () => h1.classList.remove('ko'));
+      h1.classList.remove('ko', 'final'); scrambleText(ws[0], 'Michael', 900, () => h1.classList.remove('quote'));
       scrambleText(ws[1], 'Squires', 1100, () => { ws.forEach(w => { w.style.animation = 'shine 6s ease-in-out infinite'; w.style.opacity = ''; w.style.transform = ''; }); setTimeout(() => busy = false, 3000); setTimeout(() => h1.style.minHeight = '', 600); });
-    }; stormEndAt = performance.now() + 7000; stormEndT = setTimeout(stormEndFn, 7000); }, hangul);
+    }; setEnd(stormEndAt || performance.now() + 7000); if (stormFeeds) showQuote(stormFeeds, 500); });
     }, lidOpen);
     }, PRE);
   });
