@@ -49,9 +49,11 @@ addEventListener('scroll', kick, { passive: true });
 addEventListener('resize', kick);
 // intro choreography: crest lands first, then the world fades in around it
 setTimeout(() => document.documentElement.classList.add('ready'), reduce ? 0 : 900);
+// the crown tip only lights once the crest has finished settling (ready + 1.3s landing)
+setTimeout(() => document.documentElement.classList.add('settled'), reduce ? 0 : 2200);
 // crown-tip burst now and then
 const spark = $('#spark');
-if (spark && !reduce) { const burst = () => { restart(spark, 'burst'); setTimeout(burst, 4000 + Math.random() * 6000); }; setTimeout(burst, 1800); }
+if (spark && !reduce) { const burst = () => { restart(spark, 'burst'); setTimeout(burst, 4000 + Math.random() * 6000); }; setTimeout(burst, 3000); }
 // hero raven blinks occasionally
 const eye = $('#eye');
 const blinkOnce = () => { eye.classList.remove('twice', 'slow'); restart(eye, 'blink'); };
@@ -65,6 +67,8 @@ if (eye && !reduce) {
   };
   setTimeout(blink, 2600);
 }
+// the hero name's resting CSS filter; WAAPI filter keyframes on h1 must include it or the shadows vanish mid-animation
+const DS = 'drop-shadow(0 3px 2px rgba(5,2,10,.9)) drop-shadow(0 14px 22px rgba(5,2,10,.85)) drop-shadow(0 0 40px rgba(180,107,255,.22))';
 const hangul = '가나다라마바사아자차카타파하검도태권송암승필백학혜기답연마무예마이클스콰이어';
 const scrambleText = (el, target, dur, cb, set = glyphs) => {
   const t0 = performance.now(), n = Math.max(el.textContent.length, target.length), tok = el._scr = {}; el._txt = target;
@@ -138,7 +142,7 @@ const hero = $('.hero');
 // crest parallax toward pointer
 const logoWrap = $('#logoWrap');
 // shared hero nodes, looked up once
-const heroCrest = $('.hero-crest'), heroInner = $('.hero-inner'), evilEye = $('#evil'), meteorLight = $('#meteorlight'), frontFall = $('#frontfall');
+const heroCrest = $('.hero-crest'), heroInner = $('.hero-inner'), evilEye = $('#evil'), meteorLight = $('#meteorlight'), meteorsFront = $('#meteorsFront');
 if (logoWrap && !reduce && fine) {
   const set = (rx, ry, tx, ty, px = 0, py = 0) => { const s = logoWrap.style; s.setProperty('--rx', rx + 'deg'); s.setProperty('--ry', ry + 'deg'); s.setProperty('--tx', tx + 'px'); s.setProperty('--ty', ty + 'px'); s.setProperty('--px', px); s.setProperty('--py', py); };
   logoWrap.addEventListener('pointermove', e => { const r = logoWrap.getBoundingClientRect(); const cx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1), cy = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1); set(cx * 9, -cy * 7, cx * 14, cy * 10, cx, cy); });
@@ -152,7 +156,7 @@ const storm = () => {
   if (reduce || !stormEl || !hero) return () => {};
   const sid = ++stormSeq;
   // clear any leftovers from a previous storm before building this one
-  stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr0 = frontFall; if (fr0) fr0.replaceChildren();
+  stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr0 = meteorsFront; if (fr0) fr0.replaceChildren(); const bk0 = $('#meteorsBack'); if (bk0) bk0.replaceChildren();
   // three depths: far = thin, short, slow, faint; mid = current; near = thick, long, fast, soft-focus
   const k = innerWidth < 700 ? .5 : 1;
   // meteor shower in three depths: far = faint starlike specks, mid = gold meteors, near = rare bright fireballs.
@@ -177,7 +181,7 @@ const storm = () => {
     frags[L.cls].appendChild(d);
   } });
   Object.keys(frags).forEach(c => (sub[c] || rbox || stormEl).appendChild(frags[c]));
-  const front = frontFall;
+  const front = meteorsFront;
   // two giant meteors: the first tears past in front of the crest, the second strikes it
   const hcrest = heroCrest;
   const impact = (lx, ly, sx, sy, pw = 1) => {
@@ -231,8 +235,8 @@ const storm = () => {
     }
     const ml = meteorLight; if (ml) { ml.style.setProperty('--mlx', lx + '%'); ml.style.setProperty('--mly', ly + '%'); ml.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }); }
   };
-  const launchBig = (wait, strike, onHit, mega) => {
-    if (!front) return;
+  const launchBig = (wait, strike, onHit, mega, layer) => {
+    const front = layer || meteorsFront; if (!front) return;
     const b = document.createElement('i'); b.className = 'bigm' + (mega ? ' mega' : '');
     // aim the path so the fireball head crosses the crest (path runs down-left at 42°, tan ≈ .9)
     const vh = innerHeight / 100, fr = front.getBoundingClientRect(), tr = (crestEl || hero).getBoundingClientRect();
@@ -243,34 +247,42 @@ const storm = () => {
     else { let r, th, tries = 0; do { r = .44 * Math.sqrt(Math.random()); th = Math.random() * Math.PI * 2; ax = .5 + Math.cos(th) * r; ay = .5 + Math.sin(th) * r; } while (++tries < 6 && Math.abs((ax + .9 * ay) - (launchBig.last ?? 9)) < .22); launchBig.last = ax + .9 * ay; }
     const tx = tr.left + tr.width * ax, ty = tr.top + tr.height * ay;
     const hy0 = fr.top - 75 * vh + 42.5 * vh + 31.6 * vh, hx0 = tx + .9 * (ty - hy0);
-    b.style.left = (hx0 + 28.4 * vh - 8 - fr.left) + 'px'; b.style.setProperty('--w', wait.toFixed(2) + 's'); b.addEventListener('animationend', () => b.remove()); front.appendChild(b);
+    b.style.left = (hx0 + 28.4 * vh - 8 - fr.left) + 'px'; b.style.setProperty('--w', wait.toFixed(2) + 's'); front.appendChild(b);
     // a zero-size marker at the fireball's head gives its true on-screen position every frame
     const head = document.createElement('b'); head.style.cssText = 'position:absolute;left:50%;bottom:-12px;width:0;height:0'; b.appendChild(head);
+    let pHit = 2;
     // correct the aim from real measurements: the estimate above assumes innerHeight === 1vh*100, which isn't true on
     // iOS Safari (vh is the toolbar-hidden height) and drifts with the hero's scroll parallax. measure the head's actual
     // start point and the real flight direction (-170vh, 189vh), then slide the meteor sideways so its line hits the target.
     { const pr = document.createElement('i'); pr.style.cssText = 'position:fixed;top:0;height:100vh;width:0;visibility:hidden'; document.body.appendChild(pr); const cvh = pr.getBoundingClientRect().height / 100; pr.remove();
-      const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh;
+      const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh; pHit = (ty - h0.top) / dy; // flight is linear in the animation's progress, so this is when the head reaches the target
       const off = (tx - h0.left) - (ty - h0.top) * dx / dy;
       if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px'; }
-    const ml = meteorLight, anim = b.getAnimations && b.getAnimations()[0];
-    if (!anim || !crestEl) return;
+    const ml = layer ? null : meteorLight, anim = b.getAnimations && b.getAnimations()[0]; // meteors behind the emblem don't light it
     let hit = false, fno = 0, crc = null;
+    // the strike always lands on its target point, however it's triggered (position check, progress check, or the flight ending)
+    const doHit = () => { if (hit || !crestEl || !hero.classList.contains('storming')) { if (!hit) b.remove(); return; } hit = true; if (anim) anim.pause(); b.classList.add('hit');
+      const cr = crestEl.getBoundingClientRect();
+      // the head is spent on impact, but its burning trail hangs in the air and fades out
+      b.animate([{ opacity: 1, filter: 'brightness(1.4)' }, { opacity: .8, filter: 'brightness(1)', offset: .2 }, { opacity: 0, filter: 'brightness(.7)' }], { duration: 1400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0;
+      impact(ax * 100, ay * 100, cr.left + cr.width * ax, cr.top + cr.height * ay, mega ? 2.5 : 1); if (onHit) onHit(); };
+    // on slow phones a frame can skip past the crest, or the flight can end between frames: never let a strike go missing
+    b.addEventListener('animationend', () => { if (strike && !hit) doHit(); else if (!hit) b.remove(); });
+    if (!anim || !crestEl) { if (strike) setTimeout(doHit, (wait + (mega ? .75 : .6) * .85) * 1000); return; }
     const tick = () => {
       if (!b.isConnected || hit || !hero.classList.contains('storming')) { if (ml && !hit) ml.style.opacity = 0; return; }
+      if (strike && anim.playState === 'finished') { doHit(); return; }
       const p = anim.effect.getComputedTiming().progress;
       if (p != null && p > .04) { const hr = head.getBoundingClientRect(); if (!crc || fno % 12 === 0) crc = crestEl.getBoundingClientRect(); const cr = crc, x = hr.left, y = hr.top; fno++;
         const lx = (x - cr.left) / cr.width * 100, ly = (y - cr.top) / cr.height * 100, d = Math.hypot((lx - 50) / 100, (ly - 50) / 100);
-        if (strike && y >= cr.top + cr.height * ay) { hit = true; anim.pause(); b.classList.add('hit');
-          // the head is spent on impact, but its burning trail hangs in the air and fades out
-          b.animate([{ opacity: 1, filter: 'brightness(1.4)' }, { opacity: .8, filter: 'brightness(1)', offset: .2 }, { opacity: 0, filter: 'brightness(.7)' }], { duration: 1400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0; impact(lx, ly, x, y, mega ? 2.5 : 1); if (onHit) onHit(); return; }
+        if (strike && (y >= cr.top + cr.height * ay || p >= pHit)) { doHit(); return; }
         if (ml && fno % 2 === 0) { const o = Math.max(0, Math.min(1, (.75 - d) / .4)); if (o > 0 || ml._o > 0) { ml.style.setProperty('--mlx', lx.toFixed(1) + '%'); ml.style.setProperty('--mly', ly.toFixed(1) + '%'); ml.style.opacity = o.toFixed(3); } ml._o = o; }
       } else if (ml) ml.style.opacity = 0;
       requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   };
   launchBig(3 + Math.random() * 1.2, false);
-  launchBig(5.6 + Math.random() * .5, true);
+  launchBig(6.3 + Math.random() * .5, true); // launched .7s later since it now flies 2.5x faster, so it still lands on the same beat
   // levitate as high as the room above allows (never into the nav): up to 90px
   if (crestEl) { const nb = ($('.nav') || { getBoundingClientRect: () => ({ bottom: 0 }) }).getBoundingClientRect().bottom, cty = parseFloat((getComputedStyle(crestEl).translate || '0 0').split(' ')[1]) || 0, ct = crestEl.getBoundingClientRect().top - cty; hero.style.setProperty('--lift', Math.max(16, Math.min(90, ct - nb - 18 - 16)) + 'px'); /* measured from the un-sunk baseline, with room for the float bob */ }
   hero.classList.add('storming');
@@ -288,7 +300,7 @@ const storm = () => {
     // any direction around the emblem; downward bolts are a little shorter so they don't run off the bottom
     const mang = Math.random() * Math.PI * 2, down = Math.max(0, Math.sin(mang));
     const main = crack(ox, oy, mang, (55 + Math.random() * 25) * (1 - down * .35), 1.8);
-    mk('glow', toD(main)); mk('edge', toD(main)); mk('core', toD(main));
+    const md = toD(main); mk('hz3', md); mk('hz2', md); mk('hz1', md); mk('glow', md); mk('edge', md); mk('core', md);
     const grow = (from, depth) => {
       const n = depth === 0 ? 3 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0);
       for (let k = 0; k < n; k++) {
@@ -343,10 +355,10 @@ const storm = () => {
   };
   const ts = [500, 2000, 3500, 5000, 6300, 7400].map(t => setTimeout(flash, t + Math.random() * 400));
   const stopper = () => { ts.forEach(clearTimeout); hero.classList.remove('storming');
-    setTimeout(() => { if (!hero.classList.contains('storming')) document.querySelectorAll('#frontfall .bigm').forEach(x => x.remove()); }, 950);
+    setTimeout(() => { if (!hero.classList.contains('storming')) document.querySelectorAll('.meteor-layer .bigm').forEach(x => x.remove()); }, 950);
     const ml0 = meteorLight; if (ml0) { ml0.style.opacity = 0; ml0._o = 0; }
     if (hcrest) hcrest.querySelectorAll('.crater-char,.crater-hot,.hotglow').forEach(x => { x.getAnimations().forEach(a => a.pause()); const o = getComputedStyle(x).opacity; x.getAnimations().forEach(a => a.cancel()); x.animate([{ opacity: o }, { opacity: 0 }], { duration: 1800, easing: 'ease-in', fill: 'forwards' }).onfinish = () => x.remove(); });
-    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr = frontFall; if (fr) fr.replaceChildren(); }, 1000); };
+    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.shm').forEach(x => x.remove()); const fr = meteorsFront; if (fr) fr.replaceChildren(); }, 1000); };
     // extension time: more lightning, and every ~3.5s of it a regular meteor streaks past (only the finale strikes)
   // passing meteors ride a fixed schedule through the added time (one every ~3.5s), so rapid clicks never bunch them up
   const t0 = performance.now(); let nextPass = 8500;
@@ -360,7 +372,10 @@ const storm = () => {
   };
   // the finale: the lightning goes frantic as the colossal meteor comes in; its strike hurls the emblem back, and it springs home
   stopper.finale = onHit => { for (let t = 0; t < 2600; t += 380 + Math.random() * 260) ts.push(setTimeout(flash, t));
-    launchBig(.05, true, () => {
+    // the meteor now falls ~2.5x faster, so it launches .9s later to keep its impact on the same beat
+    // a barrage of meteors streaks past, in front of and behind the emblem, right before the colossal one lands
+    if (!reduce) { const back = $('#meteorsBack'), n = 6 + (Math.random() * 3 | 0); for (let k = 0; k < n; k++) launchBig(.05 + k / n * .7 + Math.random() * .12, false, null, false, back && Math.random() < .5 ? back : null); }
+    launchBig(.95, true, () => {
       if (logoWrap && !reduce && logoWrap.animate) logoWrap.animate([
         { translate: '0 0', scale: '1' },
         { translate: '-70px 62px', scale: '.72', offset: .12, easing: 'cubic-bezier(.2,.6,.3,1)' },
@@ -385,11 +400,28 @@ if (logoWrap) {
   // the FEEDS-th click locks it: no more extension, and the colossal meteor is timed to strike when the clock runs out.
   const EXT = 3000, MAX_AHEAD = 14000, FEEDS = 5, HIT_LEAD = 1500, MIN_WAIT = 3500;
   const setEnd = at => { const now = performance.now(); stormEndAt = at; clearTimeout(stormEndT); if (stormEndFn) stormEndT = setTimeout(stormEndFn, Math.max(0, at - now)); };
-  // each click: the room darkens a step, the eye burns hotter (violet toward white), and the name glitches, longer each time
+  // each click: the eye burns hotter (violet toward white) and the lightning quickens
   // the storm speaks in the five tenets (예의 염치 인내 극기 백절불굴), each one breaking; the last click: one strike, certain death
   const QUOTES = [['예의는 끝났다', 'Courtesy ends here.'], ['염치가 시험받는다', 'Integrity is tested.'], ['인내는 너보다 길다', 'Perseverance outlasts you.'], ['극기는 사라졌다', 'Self-control is gone.'], ['백절불굴이 깨어난다', 'The indomitable spirit wakes.'], ['일격필살', 'One strike. Certain death.']];
-  const showQuote = (i, d = 700) => { const q = QUOTES[Math.min(i, QUOTES.length - 1)];
-    h1.classList.toggle('final', i >= QUOTES.length - 1); scrambleText(ws[0], q[0], d * .8, null, hangul); scrambleText(ws[1], q[1], d); };
+  // tenet tracker: built only when a storm starts (kept out of the page markup so search engines and link previews read the heading as just the name)
+  const tenetBox = document.createElement('span'); tenetBox.className = 'tenets'; tenetBox.setAttribute('aria-hidden', 'true');
+  ['예의', '염치', '인내', '극기', '백절불굴'].forEach(t => { const i = document.createElement('i'); i.textContent = t; tenetBox.appendChild(i); });
+  const tenetEls = tenetBox.querySelectorAll('i');
+  const setTenets = i => { if (h1 && !tenetBox.isConnected) h1.appendChild(tenetBox); tenetEls.forEach((t, k) => { t.classList.toggle('on', k <= i); t.classList.toggle('cur', k === i); }); };
+  const showQuote = (i, d = 700) => { const q = QUOTES[Math.min(i, QUOTES.length - 1)]; setTenets(i);
+    const fin = i >= QUOTES.length - 1, was = h1.classList.contains('final');
+    // going to the final tenet the quote collapses from two lines to one: swap it in one step (the slam covers it) and glide the subtitle + tenet row to their new spots (FLIP) instead of letting them jump
+    const glide = fin && !was && !reduce ? [ws[1], h1.querySelector('.tenets')].filter(Boolean) : [], y0 = glide.map(e => e.getBoundingClientRect().top);
+    h1.classList.toggle('final', fin);
+    if (glide.length) { ws[0]._scr = null; ws[0].textContent = ws[0]._txt = q[0]; ws[1]._scr = null; ws[1].textContent = ws[1]._txt = q[1];
+      glide.forEach((e, k) => { const dy = y0[k] - e.getBoundingClientRect().top; if (Math.abs(dy) > 1 && e.animate) e.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], { duration: 750, delay: k * 40, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); });
+      scrambleText(ws[1], q[1], d, null); }
+    else { scrambleText(ws[0], q[0], d * .8, null, hangul); scrambleText(ws[1], q[1], d); }
+    // the last tenet is a declaration of war: it slams in white-hot, then burns violet with a throbbing glow until the storm breaks
+    if (fin && !was && !reduce && ws[0].animate) { const w = ws[0];
+      w.animate([{ scale: '2.4', opacity: 0, filter: 'blur(10px) brightness(3)' }, { scale: '.92', opacity: 1, filter: 'blur(0px) brightness(1.8)', offset: .32, easing: 'steps(1)' }, { scale: '1.06', filter: 'blur(0px) brightness(1.5)', offset: .45, easing: 'cubic-bezier(.2,.7,.2,1)' }, { scale: '1', filter: 'blur(0px) brightness(1)' }], { duration: 700, easing: 'cubic-bezier(.6,0,.9,.3)' });
+      if (w._war) w._war.cancel();
+      w._war = w.animate([{ textShadow: '0 0 6px rgba(255,240,255,.9),0 0 18px rgba(200,130,255,.9),0 0 40px rgba(160,70,255,.7),0 0 80px rgba(139,61,255,.45)' }, { textShadow: '0 0 10px rgba(255,245,255,1),0 0 28px rgba(210,140,255,1),0 0 64px rgba(170,70,255,.95),0 0 130px rgba(139,61,255,.75)' }], { duration: 650, delay: 300, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' }); } };
   const feedFx = lvl => {
     const ev = evilEye; if (ev) ev.style.setProperty('--feed', (lvl / FEEDS).toFixed(2));
     // not while the first quote is still forming: that scramble's callback starts the storm clock (and catches up on early clicks)
@@ -455,6 +487,10 @@ if (logoWrap) {
       // the whole hero flinches with it, harder each time
       const hi = heroInner, j = 2 + k * 7; if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: -j + 'px ' + j * .6 + 'px' }, { translate: j * .8 + 'px ' + -j * .5 + 'px' }, { translate: -j * .5 + 'px ' + j * .3 + 'px' }, { translate: '0 0' }], { duration: 260 + k * 160, easing: 'linear' });
       if (anger >= 2 && h1) h1.animate([{ opacity: 1 }, { opacity: .3 }, { opacity: 1 }, { opacity: .55 }, { opacity: 1 }], { duration: 420, delay: 120 });
+      // 3rd click: the faintest flicker of a glitch, a couple of tiny jumps, a thin colour split and a brief scramble
+      if (anger === LEVELS - 1 && h1 && !reduce) { h1.animate([{ translate: '-2px 0', transform: 'skewX(3deg)', textShadow: '-1px 0 rgba(255,40,190,.5),1px 0 rgba(0,235,255,.5)', easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .3, easing: 'steps(1)' }, { translate: '2px 0', transform: 'skewX(-2deg)', textShadow: '-1px 0 rgba(255,40,190,.4),1px 0 rgba(0,235,255,.4)', offset: .55, easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .75 }, { translate: '0 0', transform: 'none', textShadow: 'none' }], { duration: 300, delay: 90, composite: 'add' });
+        ws.forEach((w, i) => setTimeout(() => scrambleText(w, NAME[i], 170 + i * 60), 90)); // a quick, short scramble (click 4 runs ~2x longer)
+      }
       // 4th click: the name glitches, a small taste of what's coming (short slice jumps + colour split, then it reassembles)
       if (anger === LEVELS && h1 && !reduce) {
         h1.animate([{ translate: '-6px 1px', transform: 'skewX(8deg)', textShadow: '-3px 0 rgba(255,40,190,.8),3px 0 rgba(0,235,255,.8)', easing: 'steps(1)' }, { translate: '7px 0', transform: 'skewX(-4deg)', offset: .18, easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .32, easing: 'steps(1)' }, { translate: '-3px 0', transform: 'skewX(3deg)', textShadow: '-2px 0 rgba(255,40,190,.7),2px 0 rgba(0,235,255,.7)', offset: .5, easing: 'steps(1)' }, { translate: '0 0', transform: 'none', textShadow: 'none', offset: .66 }, { translate: '0 0', transform: 'none', textShadow: 'none' }], { duration: 520, delay: 90, composite: 'add' });
@@ -514,6 +550,27 @@ if (logoWrap) {
     // the squinting lids clamp fully shut (no separate blink, so nothing jumps), the socket swaps while they're closed,
     // then they slowly part on the evil eye
     if (eye && !reduce) { setTimeout(() => { if (hero) { hero.classList.remove('glaring'); hero.classList.add('lidshut'); } }, 620); setTimeout(() => hero && hero.classList.remove('lidshut'), 1330); }
+    // just before the shockwave, the bio, buttons and scroll cue are sucked into the eye: pulled toward it, shrinking and blurring away
+    if (hero && !reduce) setTimeout(() => { const ev = evilEye; if (!ev) return; const er = ev.getBoundingClientRect(), ex = er.left + er.width / 2, ey = er.top + er.height / 2;
+      ['.hero-actions', '.hero-sub', '.scroll-cue'].forEach((s, k) => { const el = $(s); if (!el || !el.animate) return; const r = el.getBoundingClientRect(), dx = (ex - (r.left + r.width / 2)) * .8, dy = (ey - (r.top + r.height / 2)) * .8, F = 'brightness(.22) grayscale(1) ';
+        el.animate([{ translate: '0 0', scale: '1', opacity: 1, filter: F + 'blur(0px)' }, { translate: `${dx * .15}px ${dy * .15}px`, scale: '.9', opacity: 1, filter: F + 'blur(1px)', offset: .4 }, { translate: `${dx}px ${dy}px`, scale: '.12', opacity: 0, filter: F + 'blur(6px)' }], { duration: 440, delay: k * 50, easing: 'cubic-bezier(.6,0,.9,.4)', fill: 'forwards' }).onfinish = function () { hero.classList.add('absorbed'); this.cancel(); }; });
+    }, lidOpen - 480);
+    // the name is drawn up toward the eye, then the shockwave blows it apart; the quote re-forms out of the blast, white-hot and violet, then cools
+    if (h1 && !reduce) setTimeout(() => { const F = (bl, br) => DS + ' blur(' + bl + 'px) brightness(' + br + ')';
+      // text-shadow always as [violet split, gold split, glow] so every step interpolates
+      const T = (x, a, g, ga) => `-${x}px 0 rgba(180,107,255,${a}),${x}px 0 rgba(224,179,74,${a}),0 0 ${g}px rgba(200,140,255,${ga})`;
+      h1.animate([
+        { translate: '0 0', scale: '1', filter: F(0, 1), opacity: 1, textShadow: T(0, 0, 0, 0), easing: 'cubic-bezier(.6,0,.95,.4)' },
+        { translate: '0 -22px', scale: '.84', filter: F(0, .7), opacity: 1, textShadow: T(2, .5, 6, .4), offset: .22, easing: 'steps(1)' },
+        { translate: '3px -20px', scale: '.83', filter: F(0, .9), opacity: 1, textShadow: T(4, .7, 8, .5), offset: .24, easing: 'cubic-bezier(.05,1,.2,1)' },
+        { translate: '0 70px', scale: '2 .3', filter: F(26, 4.5), opacity: 0, textShadow: T(40, 1, 40, 1), offset: .3, easing: 'steps(1)' },
+        { translate: '0 0', scale: '1.6', filter: F(16, 3.2), opacity: 0, textShadow: T(30, 1, 50, 1), offset: .33, easing: 'cubic-bezier(.05,.9,.2,1)' },
+        { translate: '0 0', scale: '.93', filter: F(0, 1.8), opacity: 1, textShadow: T(8, .9, 26, .9), offset: .47, easing: 'steps(1)' },
+        { translate: '-6px 0', scale: '1.04', filter: F(0, 1.5), opacity: 1, textShadow: T(5, .8, 22, .85), offset: .5, easing: 'steps(1)' },
+        { translate: '4px 0', scale: '1.02', filter: F(0, 1.4), opacity: 1, textShadow: T(3, .6, 20, .8), offset: .53, easing: 'cubic-bezier(.3,.6,.3,1)' },
+        { translate: '0 0', scale: '1', filter: F(0, 1.15), opacity: 1, textShadow: T(0, 0, 16, .6), offset: .65, easing: 'cubic-bezier(.3,.6,.3,1)' },
+        { translate: '0 0', scale: '1', filter: F(0, 1), opacity: 1, textShadow: T(0, 0, 0, 0) }
+      ], { duration: 1200 }); }, lidOpen - 360);
     setTimeout(() => {
       if (!hero) return;
       // the lid is shut: clear the angry squint and glint so nothing sits over the evil eye as it opens
@@ -541,8 +598,10 @@ if (logoWrap) {
     setTimeout(() => {
     stormEndAt = 0; stormFeeds = 0; finaleSet = false; const endStorm = storm(); stormCtl = endStorm;
     ws.forEach(w => { w.style.animation = 'none'; w.style.opacity = 1; w.style.transform = 'none'; });
-    h1.style.minHeight = h1.offsetHeight + 'px'; // lock height so the crest doesn't shift when the name swaps
-    h1.classList.add('quote', 'ko');
+    h1.style.minHeight = h1.style.height = h1.offsetHeight + 'px'; // lock height so the crest doesn't shift; the bigger quote + tenets spill down into the space the bio and buttons left
+    setTenets(0);
+    h1.style.transition = 'none'; // size/font change happens while hidden: no visible zoom
+    h1.classList.add('quote', 'ko'); void h1.offsetWidth; requestAnimationFrame(() => { h1.style.transition = ''; });
     scrambleText(ws[0], QUOTES[0][0], 900, null, hangul);
     scrambleText(ws[1], QUOTES[0][1], 1200, () => { stormEndFn = () => {
       stormEndFn = null; stormCtl = null; finaleSet = false; stormFeeds = 0; stormEndAt = 0; { const ev = evilEye; if (ev) ev.style.removeProperty('--feed'); }
@@ -550,7 +609,7 @@ if (logoWrap) {
       // starburst fades out on its own, then the bird blinks a few times as it comes to
       setTimeout(() => {
         if (!hero) return;
-        hero.classList.add('waking'); hero.classList.remove('possessed');
+        hero.classList.add('waking'); hero.classList.remove('possessed'); hero.classList.remove('absorbed'); // the bio and buttons rise back in
         // the starburst retracts and the violet point gutters out; the lid drops heavy, the socket
         // is swapped back while it's shut, the eye opens dazed, then a few quick flutters as it comes to
         if (eye && !reduce) {
@@ -560,8 +619,25 @@ if (logoWrap) {
         }
         setTimeout(() => hero.classList.remove('waking'), reduce ? 0 : 3800);
       }, 600);
-      h1.classList.remove('ko', 'final'); scrambleText(ws[0], 'Michael', 900, () => h1.classList.remove('quote'));
-      scrambleText(ws[1], 'Squires', 1100, () => { ws.forEach(w => { w.style.animation = 'shine 6s ease-in-out infinite'; w.style.opacity = ''; w.style.transform = ''; }); setTimeout(() => busy = false, 3000); setTimeout(() => h1.style.minHeight = '', 600); });
+      // back to the name: the layout/font swap happens while the quote is faded out, so nothing jumps
+      const toName = () => {
+        if (ws[0]._war) { ws[0]._war.cancel(); ws[0]._war = null; }
+        tenetBox.remove(); h1.style.transition = 'none'; h1.classList.remove('ko', 'final', 'quote'); void h1.offsetWidth; requestAnimationFrame(() => { h1.style.transition = ''; });
+        ws.forEach(w => { w.style.animation = 'none'; w.style.opacity = ''; w.style.transform = ''; });
+        // no scramble: the name simply reappears whole (scrambling glyphs change width and make the words jostle)
+        ws.forEach(w => { w._scr = null; }); ws[0].textContent = 'Michael'; ws[1].textContent = 'Squires'; ws[0]._txt = 'Michael'; ws[1]._txt = 'Squires';
+        setTimeout(() => busy = false, 3900); setTimeout(() => { h1.style.minHeight = h1.style.height = ''; }, 1500);
+      };
+      if (reduce || !h1.animate) toName(); else {
+        // calm: the quote exhales, drifting up and softening away; then the name settles back in one word at a time, with a warm glow that fades
+        const out = h1.animate([{ opacity: 1, translate: '0 0', filter: DS + ' blur(0px)' }, { opacity: 0, translate: '0 -10px', filter: DS + ' blur(6px)' }], { duration: 750, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' });
+        out.onfinish = () => { toName(); out.cancel();
+          ws.forEach((w, i) => w.animate([
+            { opacity: 0, translate: '0 14px', filter: 'blur(5px)', textShadow: '0 0 28px rgba(246,220,140,.55)' },
+            { opacity: 1, translate: '0 0', filter: 'blur(0px)', textShadow: '0 0 18px rgba(246,220,140,.35)', offset: .6 },
+            { opacity: 1, translate: '0 0', filter: 'blur(0px)', textShadow: '0 0 0 rgba(246,220,140,0)' }
+          ], { duration: 1600, delay: 150 + i * 260, easing: 'cubic-bezier(.25,.6,.3,1)', fill: 'backwards' })); };
+      }
     }; setEnd(stormEndAt || performance.now() + 7000); if (stormFeeds) showQuote(stormFeeds, 500); });
     }, lidOpen);
     }, PRE);
