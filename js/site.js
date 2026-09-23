@@ -144,20 +144,6 @@ if (logoWrap && !reduce && fine) {
 // storm: rain + lightning behind the hero while the name is in Hangul
 const stormEl = $('#storm'), bolt = stormEl && stormEl.querySelector('.bolt');
 const crestEl = $('.hero-crest');
-// per-column top/bottom of the crest artwork, so drips start and end on the logo itself
-let cols = null;
-const getCols = () => {
-  if (cols) return cols;
-  cols = [];
-  try {
-    const img = $('.hero-logo'), N = 100, c = document.createElement('canvas'); c.width = c.height = N;
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0, N, N);
-    const d = g.getImageData(0, 0, N, N).data;
-    for (let x = 4; x < N - 4; x++) { let t = -1, b = -1; for (let y = 0; y < N; y++) if (d[(y * N + x) * 4 + 3] > 200) { if (t < 0) t = y; b = y; } if (t >= 0 && b - t > 20) cols.push([x, t, b]); }
-  } catch (e) {}
-  if (!cols.length) for (let x = 12; x < 88; x++) { const h = Math.sqrt(Math.max(0, 38 * 38 - (x - 50) ** 2)); cols.push([x, 52 - h, 52 + h]); }
-  return cols;
-};
 let stormSeq = 0;
 const storm = () => {
   if (reduce || !stormEl || !hero) return () => {};
@@ -238,11 +224,23 @@ const storm = () => {
     const b = document.createElement('i'); b.className = 'bigm' + (mega ? ' mega' : '');
     // aim the path so the fireball head crosses the crest (path runs down-left at 42°, tan ≈ .9)
     const vh = innerHeight / 100, fr = front.getBoundingClientRect(), tr = (crestEl || hero).getBoundingClientRect();
-    const tx = tr.left + tr.width * (.4 + Math.random() * .2), ty = tr.top + tr.height * (strike ? .42 + Math.random() * .16 : .35 + Math.random() * .3);
+    // strikers aim near the middle; passers cross anywhere on the emblem (random point in its disc, spread evenly by area),
+    // nudged away from the last passer's line so consecutive ones don't retrace the same path
+    let ax = .5, ay = .5;
+    if (strike) { ax = .4 + Math.random() * .2; ay = .42 + Math.random() * .16; }
+    else { let r, th, tries = 0; do { r = .44 * Math.sqrt(Math.random()); th = Math.random() * Math.PI * 2; ax = .5 + Math.cos(th) * r; ay = .5 + Math.sin(th) * r; } while (++tries < 6 && Math.abs((ax + .9 * ay) - (launchBig.last ?? 9)) < .22); launchBig.last = ax + .9 * ay; }
+    const tx = tr.left + tr.width * ax, ty = tr.top + tr.height * ay;
     const hy0 = fr.top - 75 * vh + 42.5 * vh + 31.6 * vh, hx0 = tx + .9 * (ty - hy0);
     b.style.left = (hx0 + 28.4 * vh - 8 - fr.left) + 'px'; b.style.setProperty('--w', wait.toFixed(2) + 's'); b.addEventListener('animationend', () => b.remove()); front.appendChild(b);
     // a zero-size marker at the fireball's head gives its true on-screen position every frame
     const head = document.createElement('b'); head.style.cssText = 'position:absolute;left:50%;bottom:-12px;width:0;height:0'; b.appendChild(head);
+    // correct the aim from real measurements: the estimate above assumes innerHeight === 1vh*100, which isn't true on
+    // iOS Safari (vh is the toolbar-hidden height) and drifts with the hero's scroll parallax. measure the head's actual
+    // start point and the real flight direction (-170vh, 189vh), then slide the meteor sideways so its line hits the target.
+    { const pr = document.createElement('i'); pr.style.cssText = 'position:fixed;top:0;height:100vh;width:0;visibility:hidden'; document.body.appendChild(pr); const cvh = pr.getBoundingClientRect().height / 100; pr.remove();
+      const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh;
+      const off = (tx - h0.left) - (ty - h0.top) * dx / dy;
+      if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px'; }
     const ml = $('#meteorlight'), anim = b.getAnimations && b.getAnimations()[0];
     if (!anim || !crestEl) return;
     let hit = false, fno = 0, crc = null;
@@ -251,7 +249,7 @@ const storm = () => {
       const p = anim.effect.getComputedTiming().progress;
       if (p != null && p > .04) { const hr = head.getBoundingClientRect(); if (!crc || fno % 12 === 0) crc = crestEl.getBoundingClientRect(); const cr = crc, x = hr.left, y = hr.top; fno++;
         const lx = (x - cr.left) / cr.width * 100, ly = (y - cr.top) / cr.height * 100, d = Math.hypot((lx - 50) / 100, (ly - 50) / 100);
-        if (strike && y >= ty) { hit = true; anim.pause(); b.classList.add('hit');
+        if (strike && y >= cr.top + cr.height * ay) { hit = true; anim.pause(); b.classList.add('hit');
           // the head is spent on impact, but its burning trail hangs in the air and fades out
           b.animate([{ opacity: 1, filter: 'brightness(1.4)' }, { opacity: .8, filter: 'brightness(1)', offset: .2 }, { opacity: 0, filter: 'brightness(.7)' }], { duration: 1400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0; impact(lx, ly, x, y, mega ? 2.5 : 1); if (onHit) onHit(); return; }
         if (ml && fno % 2 === 0) { const o = Math.max(0, Math.min(1, (.75 - d) / .4)); if (o > 0 || ml._o > 0) { ml.style.setProperty('--mlx', lx.toFixed(1) + '%'); ml.style.setProperty('--mly', ly.toFixed(1) + '%'); ml.style.opacity = o.toFixed(3); } ml._o = o; }
@@ -275,8 +273,9 @@ const storm = () => {
     if (!bsvg) return;
     const g = document.createElementNS(NS, 'g'), parts = [];
     const mk = (cls, d) => { const p = document.createElementNS(NS, 'path'); p.setAttribute('class', cls); p.setAttribute('d', d); p.setAttribute('pathLength', '1'); p.style.strokeDasharray = '1'; p.style.strokeDashoffset = '1'; g.appendChild(p); parts.push(p); return p; };
-    const up = -Math.PI / 2, side = Math.random() < .5 ? -1 : 1, mang = up + side * (.35 + Math.random() * .85);
-    const main = crack(ox, oy, mang, 55 + Math.random() * 25, 1.8);
+    // any direction around the emblem; downward bolts are a little shorter so they don't run off the bottom
+    const mang = Math.random() * Math.PI * 2, down = Math.max(0, Math.sin(mang));
+    const main = crack(ox, oy, mang, (55 + Math.random() * 25) * (1 - down * .35), 1.8);
     mk('glow', toD(main)); mk('edge', toD(main)); mk('core', toD(main));
     const grow = (from, depth) => {
       const n = depth === 0 ? 3 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0);
@@ -333,9 +332,13 @@ const storm = () => {
     const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.drop').forEach(x => x.remove()); const fr = $('#frontrain'); if (fr) fr.replaceChildren(); }, 1000); };
   // clicking the bird mid-storm feeds it: more lightning, and sometimes another meteor
   // extension time: more lightning, and every ~3.5s of it a regular meteor streaks past (only the finale strikes)
-  let extAcc = 0;
-  // bolts fill the newly added stretch at the END of the storm (from = ms until the old end), not the next few seconds
-  stopper.more = (ms, from = 0) => { for (let t = 250; t < ms; t += 1100 + Math.random() * 700) ts.push(setTimeout(flash, from + t)); extAcc += ms; while (extAcc >= 3500) { extAcc -= 3500; launchBig(.4 + Math.random() * 1.6, false); } };
+  // passing meteors ride a fixed schedule through the added time (one every ~3.5s), so rapid clicks never bunch them up
+  const t0 = performance.now(); let nextPass = 8500;
+  stopper.more = (ms, from = 0) => {
+    for (let t = 250; t < ms; t += 1100 + Math.random() * 700) ts.push(setTimeout(flash, from + t));
+    const now = performance.now() - t0, end = now + from + ms;
+    while (nextPass < end - 8000) { const at = Math.max(nextPass, now + 400) + (Math.random() - .5) * 400; ts.push(setTimeout(() => launchBig(0, false), at - now)); nextPass += 3500; }
+  };
   // the finale: a colossal meteor whose strike ends the storm
   // the finale: the lightning goes frantic as the colossal meteor comes in
   stopper.finale = onHit => { for (let t = 0; t < 2600; t += 380 + Math.random() * 260) ts.push(setTimeout(flash, t)); launchBig(.05, true, onHit, true); };
