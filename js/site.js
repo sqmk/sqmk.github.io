@@ -69,6 +69,8 @@ if (eye && !reduce) {
 }
 // the hero name's resting CSS filter; WAAPI filter keyframes on h1 must include it or the shadows vanish mid-animation
 const DS = 'drop-shadow(0 3px 2px rgba(5,2,10,.9)) drop-shadow(0 14px 22px rgba(5,2,10,.85)) drop-shadow(0 0 40px rgba(180,107,255,.22))';
+// the meteor's light on the crest, positioned with real numbers (Safari won't repaint a gradient when a CSS variable inside it changes)
+const mlAt = (ml, x, y) => { ml.style.backgroundImage = `radial-gradient(circle at ${(+x).toFixed(1)}% ${(+y).toFixed(1)}%,rgba(255,244,210,.8) 0,rgba(255,196,110,.45) 12%,rgba(246,150,60,.16) 26%,transparent 42%)`; };
 const hangul = '가나다라마바사아자차카타파하검도태권송암승필백학혜기답연마무예마이클스콰이어';
 const scrambleText = (el, target, dur, cb, set = glyphs) => {
   const t0 = performance.now(), n = Math.max(el.textContent.length, target.length), tok = el._scr = {}; el._txt = target;
@@ -194,6 +196,8 @@ const storm = () => {
     ht.animate([{ opacity: 1 }, { opacity: 1, offset: .12 }, { opacity: .9, offset: .35 }, { opacity: .6, offset: .6 }, { opacity: 0 }], { duration: 5400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => ht.remove();
     // sparks burst from the hit and fall
     const hr = hero.getBoundingClientRect(), px = sx - hr.left, py = sy - hr.top;
+    // debris is built a frame later, so the impact frame itself only has to draw the flash, crater and knock-back
+    requestAnimationFrame(() => {
     for (let k = 0, n = Math.round((innerWidth < 700 ? 14 : 28) * (pw > 1 ? 1.35 : 1)); k < n; k++) { const s = document.createElement('i'); s.className = 'spk'; debris.appendChild(s);
       const ang = -Math.PI / 2 + (Math.random() - .5) * 3, v = (60 + Math.random() * 190) * (pw > 1 ? 1.7 : 1), ex = Math.cos(ang) * v, ey = Math.sin(ang) * v;
       s.animate([{ transform: `translate(${px}px,${py}px) scale(1)`, opacity: 1 }, { transform: `translate(${px + ex * .7}px,${py + ey * .7}px) scale(.8)`, opacity: 1, offset: .45 }, { transform: `translate(${px + ex}px,${py + ey + 70 + Math.random() * 60}px) scale(.3)`, opacity: 0 }], { duration: 650 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.5,1)', fill: 'forwards' }).onfinish = () => s.remove(); }
@@ -204,7 +208,7 @@ const storm = () => {
     // smoke rolls up out of the crater
     for (let k = 0; k < (pw > 1 ? 6 : 5); k++) { const s = document.createElement('i'); s.className = 'smoke' + (pw > 1 ? ' mega' : ''); debris.appendChild(s); const dx = (Math.random() - .5) * 50;
       s.animate([{ transform: `translate(${px}px,${py}px) scale(.3)`, opacity: 0 }, { opacity: .9, offset: .15 }, { transform: `translate(${px + dx}px,${py - 90 - Math.random() * 60}px) scale(${2 + Math.random() * 1.5})`, opacity: 0 }], { duration: 2200 + Math.random() * 1000, delay: k * 120, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'both' }).onfinish = () => s.remove(); }
-    hero.appendChild(debris);
+    hero.appendChild(debris); });
     // a searing flash, the whole hero is rocked, and the crest is knocked back hard
     const fl = document.createElement('i'); fl.className = 'iflash'; fl.style.setProperty('--fx', px + 'px'); fl.style.setProperty('--fy', py + 'px'); hero.appendChild(fl);
     fl.animate([{ opacity: 0 }, { opacity: 1, offset: .06 }, { opacity: .4, offset: .25 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }).onfinish = () => fl.remove();
@@ -224,21 +228,24 @@ const storm = () => {
       hg.animate([{ opacity: 0 }, { opacity: 1, offset: .06 }, { opacity: .95, offset: .3 }, { opacity: .6, offset: .6 }, { opacity: 0 }], { duration: 4200, easing: 'ease-out', fill: 'forwards' }).onfinish = () => hg.remove();
       // the colossal hit: a white-out, a massive shockwave, and a long violent quake
       fl.style.setProperty('--fx', px + 'px'); const wo = document.createElement('i'); wo.className = 'whiteout'; hero.appendChild(wo);
-      wo.animate([{ opacity: 0 }, { opacity: 1, offset: .05 }, { opacity: .85, offset: .2 }, { opacity: 0 }], { duration: 1500, easing: 'ease-out' }).onfinish = () => wo.remove();
+      wo.animate([{ opacity: 1 }, { opacity: .85, offset: .2 }, { opacity: 0 }], { duration: 1500, easing: 'ease-out' }).onfinish = () => wo.remove();
       // a gold ring leads the violet shockwave
-      const R = Math.hypot(hr.width, hr.height) / 20, gs = document.createElement('i'); gs.className = 'shock gold'; const ring = (el, S, bw) => { el.style.width = el.style.height = 40 * S + 'px'; el.style.margin = -20 * S + 'px'; el.style.borderWidth = bw + 'px'; return .1 / S; }; const g0 = ring(gs, R * 1.3, 3); hero.appendChild(gs);
+      // rings sized to just reach the farthest corner (was ~2.5x oversized: two ~5000px glowing layers, a big stall on iOS); built a frame later
+      const far = Math.max(Math.hypot(px, py), Math.hypot(hr.width - px, py), Math.hypot(px, hr.height - py), Math.hypot(hr.width - px, hr.height - py));
+      requestAnimationFrame(() => { const R = far * 2.1 / 40 / 1.3, gs = document.createElement('i'); gs.className = 'shock gold'; const ring = (el, S, bw) => { el.style.width = el.style.height = 40 * S + 'px'; el.style.margin = -20 * S + 'px'; el.style.borderWidth = bw + 'px'; return .1 / S; }; const g0 = ring(gs, R * 1.3, 3); hero.appendChild(gs);
       gs.animate([{ transform: `translate(${px}px,${py}px) scale(${g0})`, opacity: 1 }, { opacity: 1, offset: .15 }, { transform: `translate(${px}px,${py}px) scale(1)`, opacity: 0 }], { duration: 800, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => gs.remove();
       const sh = document.createElement('i'); sh.className = 'shock'; const s0 = ring(sh, R * 1.2, 2); hero.appendChild(sh);
-      sh.animate([{ transform: `translate(${px}px,${py}px) scale(${s0})`, opacity: 1 }, { opacity: 1, offset: .2 }, { transform: `translate(${px}px,${py}px) scale(1)`, opacity: 0 }], { duration: 1200, delay: 120, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove();
+      sh.animate([{ transform: `translate(${px}px,${py}px) scale(${s0})`, opacity: 1 }, { opacity: 1, offset: .2 }, { transform: `translate(${px}px,${py}px) scale(1)`, opacity: 0 }], { duration: 1200, delay: 100, easing: 'cubic-bezier(.05,.8,.25,1)', fill: 'both' }).onfinish = () => sh.remove(); });
       if (hi && hi.animate) hi.animate([{ translate: '0 0' }, { translate: '-26px 18px' }, { translate: '22px -16px' }, { translate: '-18px 12px' }, { translate: '15px -10px' }, { translate: '-11px 7px' }, { translate: '8px -5px' }, { translate: '-5px 3px' }, { translate: '0 0' }], { duration: 1100, easing: 'linear' });
       hcrest.animate([{ rotate: '0deg', scale: '1' }, { rotate: '-14deg', scale: '.84', offset: .1 }, { rotate: '6deg', scale: '1.03', offset: .3 }, { rotate: '-3deg', scale: '.98', offset: .52 }, { rotate: '1.2deg', offset: .75 }, { rotate: '0deg', scale: '1' }], { duration: 1500, easing: 'ease-out' });
     }
-    const ml = meteorLight; if (ml) { ml.style.setProperty('--mlx', lx + '%'); ml.style.setProperty('--mly', ly + '%'); ml.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }); }
+    const ml = meteorLight; if (ml) { mlAt(ml, lx, ly); ml.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out' }); }
   };
   const launchBig = (wait, strike, onHit, mega, layer) => {
     const front = layer || meteorsFront; if (!front) return;
     const b = document.createElement('i'); b.className = 'bigm' + (mega ? ' mega' : '');
     // aim the path so the fireball head crosses the crest (path runs down-left at 42°, tan ≈ .9)
+    let flight = null;
     const vh = innerHeight / 100, fr = front.getBoundingClientRect(), tr = (crestEl || hero).getBoundingClientRect();
     // strikers aim near the middle; passers cross anywhere on the emblem (random point in its disc, spread evenly by area),
     // nudged away from the last passer's line so consecutive ones don't retrace the same path
@@ -256,28 +263,40 @@ const storm = () => {
     { const pr = document.createElement('i'); pr.style.cssText = 'position:fixed;top:0;height:100vh;width:0;visibility:hidden'; document.body.appendChild(pr); const cvh = pr.getBoundingClientRect().height / 100; pr.remove();
       const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh;
       const off = (tx - h0.left) - (ty - h0.top) * dx / dy;
-      if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px'; }
-    const ml = layer ? null : meteorLight, anim = b.getAnimations && b.getAnimations()[0]; // meteors behind the emblem don't light it
+      if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px';
+      // strikers fly a flight that ENDS on the target, so the head can never overshoot. (iOS/iPadOS Safari runs CSS animations on
+      // the compositor, ahead of the main thread; a position check on the main thread fired a frame or two late, so the meteor was
+      // already past the crest when the strike registered.)
+      const f = (ty - h0.top) / dy; if (strike && isFinite(f) && f > .1 && f < 1) flight = { x: dx * f, y: dy * f, ms: (mega ? 750 : 600) * (.35 + .6 * f) }; }
+    const ml = layer ? null : meteorLight; // meteors behind the emblem don't light it
+    let anim = b.getAnimations && b.getAnimations()[0];
+    if (flight && b.animate) { b.style.animation = 'none'; if (anim) anim.cancel();
+      anim = b.animate([{ translate: '0 0', opacity: 0 }, { opacity: 1, offset: .08 }, { translate: `${flight.x}px ${flight.y}px`, opacity: 1 }], { duration: flight.ms, delay: wait * 1000, easing: 'cubic-bezier(.35,0,.9,.6)', fill: 'both' });
+      anim.onfinish = () => doHit(tx, ty); }
     let hit = false, fno = 0, crc = null;
     // the strike always lands on its target point, however it's triggered (position check, progress check, or the flight ending)
-    const doHit = (hx, hy) => { if (hit || !crestEl || !hero.classList.contains('storming')) { if (!hit) b.remove(); return; } hit = true; if (anim) anim.pause(); b.classList.add('hit');
+    const doHit = (hx, hy) => { if (hit || !crestEl || !hero.classList.contains('storming')) { if (!hit) b.remove(); return; } hit = true; if (anim && anim.playState !== 'finished') anim.pause(); b.classList.add('hit');
       const cr = crestEl.getBoundingClientRect();
       // the head is spent on impact, but its burning trail hangs in the air and fades out
-      b.animate([{ opacity: 1, filter: 'brightness(1.4)' }, { opacity: .8, filter: 'brightness(1)', offset: .2 }, { opacity: 0, filter: 'brightness(.7)' }], { duration: 1400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0;
+      // the meteor is driven into the crest: its trail collapses into the impact point in a blink instead of hanging frozen in the air
+      // (collapse toward the head at the bottom, in the meteor's own rotated frame; the pivot stays at the centre so it doesn't jump)
+      const bh = b.offsetHeight / 2;
+      b.animate([{ transform: 'translateY(0) scaleY(1)', opacity: 1 }, { transform: `translateY(${bh * .8}px) scaleY(.2)`, opacity: .75, offset: .4 }, { transform: `translateY(${bh}px) scaleY(0)`, opacity: 0 }], { duration: mega ? 240 : 200, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0;
       // land where the head actually is (the crest may have moved since launch); fall back to the aim point if the head was never measured
       const sx = hx ?? cr.left + cr.width * ax, sy = hy ?? cr.top + cr.height * ay;
       impact((sx - cr.left) / cr.width * 100, (sy - cr.top) / cr.height * 100, sx, sy, mega ? 2.5 : 1); if (onHit) onHit(); };
     // on slow phones a frame can skip past the crest, or the flight can end between frames: never let a strike go missing
     b.addEventListener('animationend', () => { if (strike && !hit) doHit(); else if (!hit) b.remove(); });
     if (!anim || !crestEl) { if (strike) setTimeout(doHit, (wait + (mega ? .75 : .6) * .85) * 1000); return; }
+    if (strike) setTimeout(() => { if (!hit) doHit(flight ? tx : undefined, flight ? ty : undefined); }, wait * 1000 + (flight ? flight.ms : (mega ? 750 : 600)) + 250); // last-resort safety net
     const tick = () => {
       if (!b.isConnected || hit || !hero.classList.contains('storming')) { if (ml && !hit) ml.style.opacity = 0; return; }
-      if (strike && anim.playState === 'finished') { doHit(); return; } // flew past between frames: land on the aim point
+      if (strike && anim.playState === 'finished') { doHit(flight ? tx : undefined, flight ? ty : undefined); return; } // flew past between frames: land on the aim point
       const p = anim.effect.getComputedTiming().progress;
       if (p != null && p > .04) { const hr = head.getBoundingClientRect(); if (!crc || fno % 12 === 0) crc = crestEl.getBoundingClientRect(); const cr = crc, x = hr.left, y = hr.top; fno++;
         const lx = (x - cr.left) / cr.width * 100, ly = (y - cr.top) / cr.height * 100, d = Math.hypot((lx - 50) / 100, (ly - 50) / 100);
-        if (strike && y >= cr.top + cr.height * ay) { doHit(x, y); return; }
-        if (ml && fno % 2 === 0) { const o = Math.max(0, Math.min(1, (.75 - d) / .4)); if (o > 0 || ml._o > 0) { ml.style.setProperty('--mlx', lx.toFixed(1) + '%'); ml.style.setProperty('--mly', ly.toFixed(1) + '%'); ml.style.opacity = o.toFixed(3); } ml._o = o; }
+        if (strike && !flight && y >= cr.top + cr.height * ay) { doHit(x, y); return; }
+        if (ml && fno % 2 === 0) { const o = Math.max(0, Math.min(1, (.75 - d) / .4)); if (o > 0 || ml._o > 0) { mlAt(ml, lx, ly); ml.style.opacity = o.toFixed(3); } ml._o = o; }
       } else if (ml) ml.style.opacity = 0;
       requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
@@ -328,7 +347,7 @@ const storm = () => {
     if (evil) { restart(evil, 'flare'); setTimeout(() => evil.classList.remove('flare'), 700); }
     setTimeout(() => {
     const rs = []; // [el, class] pairs restarted together after all reads/writes
-    bolt.style.setProperty('--bx', bx + '%'); rs.push([bolt, 'flash']);
+    bolt.style.setProperty('--bx', bx + '%'); bolt.style.background = `radial-gradient(ellipse 34% 26% at ${(bx - 13).toFixed(1)}% 32%,rgba(200,90,255,.42),transparent 70%),radial-gradient(ellipse 28% 20% at ${(bx + 16).toFixed(1)}% 14%,rgba(246,196,120,.34),transparent 70%),radial-gradient(ellipse 46% 30% at ${(bx + 5).toFixed(1)}% 44%,rgba(110,30,200,.36),transparent 72%),radial-gradient(ellipse 22% 16% at ${(bx - 4).toFixed(1)}% 8%,rgba(255,150,220,.25),transparent 70%),radial-gradient(ellipse 70% 55% at ${bx.toFixed(1)}% 18%,rgba(240,230,255,.85),rgba(160,110,255,.3) 45%,transparent 75%)`; // inline numbers: Safari mis-renders calc(var()) gradient positions rs.push([bolt, 'flash']);
     const hz = $('#horizon'); if (hz) rs.push([hz, 'lit']);
     const path = drawBolt(ox, oy) || [[ox, oy]];
     const [ex, ey] = path[path.length - 1];
@@ -344,8 +363,8 @@ const storm = () => {
       const hr = hero.getBoundingClientRect(), cr = crestEl.getBoundingClientRect();
       const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2, px = hr.left + hr.width * ex / 100, py = hr.top + hr.height * ey / 100;
       const dx = px - cx, dy = py - cy, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
-      rim.style.setProperty('--lx', (50 + ux * 42) + '%'); rim.style.setProperty('--ly', (50 + uy * 42) + '%');
-      rim.style.setProperty('--la', (Math.atan2(-ux, uy) * 180 / Math.PI) + 'deg');
+      // gradient written inline with real numbers: Safari doesn't reliably repaint a gradient when a CSS variable inside it changes
+      rim.style.backgroundImage = `radial-gradient(ellipse 90% 85% at ${(50 + ux * 42).toFixed(1)}% ${(50 + uy * 42).toFixed(1)}%,rgba(255,248,228,.95),rgba(246,220,140,.45) 40%,transparent 75%),linear-gradient(${(Math.atan2(-ux, uy) * 180 / Math.PI).toFixed(1)}deg,rgba(255,244,214,.6) 0%,rgba(246,220,140,.28) 38%,transparent 78%)`;
       rs.push([rim, 'flash']);
     }
     if (h1) rs.push([h1, 'lit']);
