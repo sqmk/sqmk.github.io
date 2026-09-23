@@ -120,11 +120,12 @@ if (crest) {
     const words = talk ? talk.querySelectorAll('.w') : [];
     const reset = () => {
       wrap.classList.remove('done', 'pulse', 'charged'); wrap.style.setProperty('--g', 0); wrap.style.setProperty('--s', 0);
-      if (words.length === 2) { scrambleText(words[0], "Let's", 1000, () => talk.classList.remove('ko')); scrambleText(words[1], 'talk', 1200, () => { spins = 0; fired = false; }); }
+      if (words.length === 2) { scrambleText(words[0], "Let's", 1000, () => talk.classList.remove('ko')); scrambleText(words[1], 'talk', 1200, () => { spins = 0; fired = false; setTimeout(() => talk.style.minHeight = '', 700); }); }
       else { spins = 0; fired = false; }
     };
     if (words.length === 2) {
       words.forEach(w => { w.querySelectorAll('i').forEach(i => { i.style.transition = 'none'; i.style.opacity = 1; i.style.transform = 'none'; }); });
+      talk.style.minHeight = talk.offsetHeight + 'px'; // lock height so nothing below jumps when the text swaps
       setTimeout(() => {
         talk.classList.add('ko');
         scrambleText(words[0], '정신일도', 1300, null, hangul);
@@ -134,9 +135,7 @@ if (crest) {
     crest.title = '';
   });
 }
-// hero spotlight
-const hero = $('.hero'), spot = $('#spot');
-if (hero && spot && !reduce && fine) hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); spot.style.setProperty('--mx', (e.clientX - r.left) + 'px'); spot.style.setProperty('--my', (e.clientY - r.top) + 'px'); });
+const hero = $('.hero');
 // crest parallax toward pointer
 const logoWrap = $('#logoWrap');
 if (logoWrap && !reduce && fine) {
@@ -161,19 +160,46 @@ const getCols = () => {
   if (!cols.length) for (let x = 12; x < 88; x++) { const h = Math.sqrt(Math.max(0, 38 * 38 - (x - 50) ** 2)); cols.push([x, 52 - h, 52 + h]); }
   return cols;
 };
+let stormSeq = 0;
 const storm = () => {
   if (reduce || !stormEl || !hero) return () => {};
-  const n = innerWidth < 700 ? 40 : 80, frag = document.createDocumentFragment();
-  for (let i = 0; i < n; i++) {
-    const d = document.createElement('i'); d.className = 'drop';
-    d.style.left = (Math.random() * 130) + '%';
-    d.style.setProperty('--l', (8 + Math.random() * 10) + 'vh');
-    d.style.setProperty('--d', (.45 + Math.random() * .35) + 's');
-    d.style.setProperty('--w', (-Math.random()) + 's');
-    d.style.opacity = .35 + Math.random() * .65;
-    frag.appendChild(d);
+  const sid = ++stormSeq;
+  // clear any leftovers from a previous storm before building this one
+  stormEl.querySelectorAll('.drop').forEach(x => x.remove()); const fr0 = $('#frontrain'); if (fr0) fr0.replaceChildren();
+  // three depths: far = thin, short, slow, faint; mid = current; near = thick, long, fast, soft-focus
+  const k = innerWidth < 700 ? .5 : 1;
+  const layers = [
+    { cls: 'far', n: 70, l: [4, 5], d: [1.7, .8], o: [.14, .18] },
+    { cls: 'mid', n: 60, l: [8, 10], d: [.75, .3], o: [.35, .55] },
+    { cls: 'near', n: 12, l: [18, 12], d: [.32, .12], o: [.45, .35] }
+  ];
+  const rbox = stormEl.querySelector('.rainbox'), sub = {}; ['far', 'mid', 'near'].forEach(c => sub[c] = rbox && rbox.querySelector('.rb.' + c));
+  const frags = { far: document.createDocumentFragment(), mid: document.createDocumentFragment(), near: document.createDocumentFragment() };
+  // each drop respawns at a fresh random x every time it loops, so no fixed rain lanes form
+  const reseed = e => { const t = e.currentTarget; t.style.left = (Math.random() * 130) + '%'; };
+  layers.forEach(L => { const cnt = Math.round(L.n * k); for (let i = 0; i < cnt; i++) {
+    const d = document.createElement('i'); d.className = 'drop ' + L.cls;
+    d.style.left = ((i + Math.random()) / cnt * 130) + '%';
+    d.addEventListener('animationiteration', reseed);
+    d.style.setProperty('--l', (L.l[0] + Math.random() * L.l[1]) + 'vh');
+    d.style.setProperty('--d', (L.d[0] + Math.random() * L.d[1]) + 's');
+    d.style.setProperty('--w', (-Math.random() * 1.5) + 's');
+    d.style.opacity = L.o[0] + Math.random() * L.o[1];
+    frags[L.cls].appendChild(d);
+  } });
+  Object.keys(frags).forEach(c => (sub[c] || rbox || stormEl).appendChild(frags[c]));
+  // a sparse few streaks fall in front of the crest and name
+  const front = $('#frontrain');
+  if (front) for (let i = 0, m = innerWidth < 700 ? 4 : 8; i < m; i++) {
+    const f = document.createElement('i'); f.className = 'fdrop';
+    f.style.left = (15 + Math.random() * 100) + '%';
+    f.addEventListener('animationiteration', () => { f.style.left = (15 + Math.random() * 100) + '%'; });
+    f.style.setProperty('--l', (16 + Math.random() * 12) + 'vh');
+    f.style.setProperty('--d', (.3 + Math.random() * .15) + 's');
+    f.style.setProperty('--w', (-Math.random() * 1.2) + 's');
+    f.style.opacity = .3 + Math.random() * .3;
+    front.appendChild(f);
   }
-  const rainbox = stormEl.querySelector('.rainbox') || stormEl; rainbox.appendChild(frag);
   hero.classList.add('storming');
   // water sim: rain beads land and grow, neighbours merge, heavy drops slide with stick-slip,
   // leave wet trails and residue, pool at the bottom edge, then detach and fall
@@ -182,7 +208,7 @@ const storm = () => {
     const cs = getCols(), colAt = {};
     cs.forEach(([x, t, b]) => colAt[x] = [t, b]);
     const H = () => crestEl.clientHeight || 1, W = () => crestEl.clientWidth || 1;
-    const drops = [];
+    const drops = [], cap = innerWidth < 700 ? 32 : 70;
     let ending = false, last = performance.now(), spawnAcc = 0;
     const add = (x, y, m, state = 'bead') => {
       const el = document.createElement('i'); el.className = 'drip';
@@ -210,16 +236,19 @@ const storm = () => {
     const src = cs.filter(([, t, b]) => b > 58).length ? cs.filter(([, t, b]) => b > 58) : cs;
     const pickSpot = () => { const [x, t, b] = src[Math.random() * src.length | 0], top = Math.max(t, 50); return [x + Math.random(), top + Math.random() * (b - top) * .55]; };
     const t0 = performance.now() + 1400; // first drops land after ~1.4s
+    const floorPct = () => { const hr = hero.getBoundingClientRect(), cr = crestEl.getBoundingClientRect(); return (hr.bottom - cr.top) / (cr.height || 1) * 100; };
+    let floor = floorPct();
     const step = now => {
       const dt = Math.min(.05, (now - last) / 1000); last = now;
       // rain keeps landing while it storms
       const soak = Math.max(0, Math.min(1, (now - t0) / 3200));
-      if (!ending && now > t0) { spawnAcc += dt * (4 + 16 * soak); while (spawnAcc > 1) { spawnAcc--;
+      if (!ending && now > t0) { spawnAcc += dt * (4 + 16 * soak) * (cap / 70); while (spawnAcc > 1) { spawnAcc--;
         const [x, y] = pickSpot(), m = .18 + Math.random() * .3;
         const hit = drops.find(o => o.state !== 'fall' && Math.abs(o.x - x) < 2.2 && Math.abs(o.y - y) < 2.6);
-        if (hit) hit.m = Math.min(1.8, hit.m + m * .7); else if (drops.length < 70) add(x, y, m);
+        if (hit) hit.m = Math.min(1.8, hit.m + m * .7); else if (drops.length < cap) add(x, y, m);
       } }
       const hp = H(), wp = W();
+      if (Math.random() < .05) floor = floorPct();
       for (let i = drops.length - 1; i >= 0; i--) {
         const d = drops[i];
         const col = colAt[Math.round(d.x)] || colAt[Math.floor(d.x)];
@@ -246,8 +275,9 @@ const storm = () => {
           d.m += dt * .6;                                       // pools at the edge
           if (d.m > 1.4) { d.state = 'fall'; d.vy = 8; }
         } else if (d.state === 'fall') {
-          d.vy += 260 * dt; d.y += d.vy * dt; d.fade -= dt * 2.2;
-          if (d.fade <= 0) { d.el.remove(); drops.splice(i, 1); continue; }
+          d.vy += 260 * dt; d.y += d.vy * dt;
+          if (d.y > floor - 8) d.fade -= dt * 4;          // fades only as it reaches the bottom of the panel
+          if (d.fade <= 0 || d.y > floor) { d.el.remove(); drops.splice(i, 1); continue; }
         }
         // merge with anything we touch
         if (d.state === 'slide' || d.state === 'hang') {
@@ -259,13 +289,14 @@ const storm = () => {
             }
           }
         }
-        const stretch = d.state === 'fall' ? Math.min(1.2, d.vy / 120) : d.state === 'slide' ? Math.min(.35, d.vy / 60) : d.state === 'hang' ? (d.m - 1) * .5 : 0;
+        const stretch = d.state === 'fall' ? Math.min(2.2, d.vy / 90) : d.state === 'slide' ? Math.min(.35, d.vy / 60) : d.state === 'hang' ? (d.m - 1) * .5 : 0;
         const el = d.el;
         el.style.left = d.x + '%'; el.style.top = d.y + '%';
         el.style.setProperty('--sz', d.m.toFixed(3));
         el.style.transform = `scale(${1 - stretch * .25},${1 + stretch})`;
-        el.style.opacity = (ending ? d.fade : 1) * Math.min(1, .45 + d.m * .6);
-        if (ending) d.fade -= dt * 1.2;
+        el.style.opacity = d.fade * Math.min(1, .45 + d.m * .6);
+        // after the storm: moving drops finish their run and fall off; still beads slowly evaporate
+        if (ending && d.state === 'bead') d.fade -= dt * .6;
         if (ending && d.fade <= 0) { endTrail(d); el.remove(); drops.splice(i, 1); }
       }
       if (drops.length || !ending) raf = requestAnimationFrame(step);
@@ -275,21 +306,29 @@ const storm = () => {
   }
   // visible branching bolt + strike light on the crest and name
   const bsvg = stormEl.querySelector('.boltsvg'), rim = $('#rim'), h1 = $('.hero h1'), NS = 'http://www.w3.org/2000/svg';
-  const zig = (x, y, yEnd, spread, step) => { const p = [[x, y]]; while (y < yEnd) { y += step * (.6 + Math.random() * .8); x += (Math.random() - .5) * spread; p.push([x, y]); } return p; };
+  // fine, jagged, dendritic bolts like the ones crackling in the crest artwork
+  const crack = (x, y, ang, len, seg) => { const p = [[x, y]]; let a = ang; for (let d = 0; d < len; d += seg) { a += (Math.random() - .5) * 1.1; a = ang + Math.max(-.7, Math.min(.7, a - ang)); x += Math.cos(a) * seg * (.6 + Math.random() * .8); y += Math.sin(a) * seg * (.6 + Math.random() * .8); p.push([x, y]); } return p; };
   const toD = p => 'M' + p.map(q => q[0].toFixed(2) + ' ' + q[1].toFixed(2)).join(' L');
   const drawBolt = bx => {
     if (!bsvg) return;
-    const g = document.createElementNS(NS, 'g'), main = zig(bx, -4, 48 + Math.random() * 22, 7, 4.5);
-    const mk = (cls, d) => { const p = document.createElementNS(NS, 'path'); p.setAttribute('class', cls); p.setAttribute('d', d); p.setAttribute('pathLength', '1'); p.style.strokeDasharray = '1'; p.style.strokeDashoffset = '1'; g.appendChild(p); return p; };
-    const parts = [mk('glow', toD(main)), mk('core', toD(main))];
-    for (let k = 0, n = 1 + (Math.random() * 2 | 0); k < n; k++) {
-      const at = main[2 + (Math.random() * (main.length - 4) | 0)], dir = Math.random() < .5 ? -1 : 1;
-      const br = zig(at[0], at[1], at[1] + 10 + Math.random() * 14, 5, 3).map((q, i) => [q[0] + dir * i * 1.6, q[1]]);
-      parts.push(mk('branch', toD(br)));
-    }
+    const g = document.createElementNS(NS, 'g'), parts = [];
+    const mk = (cls, d) => { const p = document.createElementNS(NS, 'path'); p.setAttribute('class', cls); p.setAttribute('d', d); p.setAttribute('pathLength', '1'); p.style.strokeDasharray = '1'; p.style.strokeDashoffset = '1'; g.appendChild(p); parts.push(p); return p; };
+    const main = crack(bx, -4, Math.PI / 2 + (Math.random() - .5) * .5, 52 + Math.random() * 22, 1.8);
+    mk('glow', toD(main)); mk('edge', toD(main)); mk('core', toD(main));
+    const grow = (from, depth) => {
+      const n = depth === 0 ? 3 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0);
+      for (let k = 0; k < n; k++) {
+        const i = 1 + (Math.random() * (from.length - 2) | 0), [x, y] = from[i], side = Math.random() < .5 ? -1 : 1;
+        const ang = Math.PI / 2 + side * (.6 + Math.random() * .7), br = crack(x, y, ang, (depth === 0 ? 10 + Math.random() * 16 : 4 + Math.random() * 7), 1.3);
+        const d = toD(br); mk(depth === 0 ? 'bedge' : 'twig', d); if (depth === 0) mk('branch', d);
+        if (depth < 1) grow(br, depth + 1);
+      }
+    };
+    grow(main, 0);
     bsvg.appendChild(g);
-    parts.forEach(p => p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 70, easing: 'linear', fill: 'forwards' }));
-    g.animate([{ opacity: 1 }, { opacity: .15, offset: .15 }, { opacity: .95, offset: .25 }, { opacity: .1, offset: .45 }, { opacity: .5, offset: .55 }, { opacity: 0 }], { duration: 520, easing: 'linear', fill: 'forwards' }).onfinish = () => g.remove();
+    parts.forEach(p => p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 60 + Math.random() * 40, easing: 'linear', fill: 'forwards' }));
+    g.animate([{ opacity: 1 }, { opacity: .15, offset: .15 }, { opacity: .95, offset: .25 }, { opacity: .1, offset: .45 }, { opacity: .5, offset: .55 }, { opacity: 0 }], { duration: 560, easing: 'linear', fill: 'forwards' }).onfinish = () => g.remove();
+    return main;
   };
   const evil = $('#evil');
   const flash = () => {
@@ -297,28 +336,32 @@ const storm = () => {
     if (evil) { restart(evil, 'flare'); setTimeout(() => evil.classList.remove('flare'), 700); }
     setTimeout(() => {
     bolt.style.setProperty('--bx', bx + '%'); restart(bolt, 'flash');
-    const rift = $('#rift'); if (rift) { rift.style.setProperty('--bx', bx + '%'); restart(rift, 'open'); }
     const hz = $('#horizon'); if (hz) restart(hz, 'lit');
-    drawBolt(bx);
-    if (rim) { rim.style.setProperty('--lx', Math.max(0, Math.min(100, (bx - 50) * 2.2 + 50)) + '%'); restart(rim, 'flash'); }
+    const path = drawBolt(bx) || [[bx, 10]];
+    // stars peek through a soft seam that follows the whole bolt, widest near the top and tapering down
+    const rift = $('#rift');
+    if (rift) {
+      const n = path.length, m = path.map(([x, y], i) => { const t = i / Math.max(1, n - 1), w = (6.5 - t * 3.5).toFixed(2), hh = (5 - t * 1.5).toFixed(2); return `radial-gradient(ellipse ${w}% ${hh}% at ${(x + (Math.random() - .5) * 1.5).toFixed(2)}% ${Math.max(0, y).toFixed(2)}%,#000 0 25%,transparent 100%)`; }).join(',');
+      rift.style.webkitMaskImage = m; rift.style.maskImage = m;
+      rift.style.setProperty('--bx', bx + '%'); restart(rift, 'open');
+    }
+    if (rim && crestEl) {
+      const hr = hero.getBoundingClientRect(), cr = crestEl.getBoundingClientRect();
+      const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2, px = hr.left + hr.width * bx / 100, py = hr.top;
+      const dx = px - cx, dy = py - cy, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+      rim.style.setProperty('--lx', (50 + ux * 42) + '%'); rim.style.setProperty('--ly', (50 + uy * 42) + '%');
+      rim.style.setProperty('--la', (Math.atan2(-ux, uy) * 180 / Math.PI) + 'deg');
+      restart(rim, 'flash');
+    }
     if (h1) restart(h1, 'lit');
     }, 140);
   };
   // wind gusts shear the rain
   const rb = stormEl.querySelector('.rainbox');
-  const gustT = [900, 2800, 4700, 6600].map(t => t + Math.random() * 600).map(t => setTimeout(() => { if (!rb) return; rb.classList.add('gust'); setTimeout(() => rb.classList.remove('gust'), 900 + Math.random() * 500); }, t));
-  // rain ripples in the pool under the crest
-  const puddle = $('#puddle');
-  const ripT = puddle ? setInterval(() => {
-    for (let k = 0; k < 2; k++) {
-      const a = Math.random() * 6.283, r = Math.sqrt(Math.random()), p = document.createElement('i'); p.className = 'pring';
-      p.style.left = (50 + Math.cos(a) * r * 44) + '%'; p.style.top = (50 + Math.sin(a) * r * 38) + '%'; p.style.setProperty('--w', (14 + Math.random() * 26) + 'px');
-      puddle.appendChild(p); p.addEventListener('animationend', () => p.remove());
-    }
-  }, 160) : null;
+  const gustT = [900, 2800, 4700, 6600].map(t => t + Math.random() * 600).map(t => setTimeout(() => { if (!rb) return; const frg = $('#frontrain'), gs = (.65 + Math.random() * .7).toFixed(2); rb.style.setProperty('--gs', gs); frg && frg.style.setProperty('--gs', gs); rb.classList.add('gust'); frg && frg.classList.add('gust'); setTimeout(() => { rb.classList.remove('gust'); frg && frg.classList.remove('gust'); }, 900 + Math.random() * 500); }, t));
   const ts = [500, 2000, 3500, 5000, 6300, 7400].map(t => setTimeout(flash, t + Math.random() * 400));
-  return () => { ts.forEach(clearTimeout); gustT.forEach(clearTimeout); clearInterval(ripT); if (rb) rb.classList.remove('gust'); simStop && simStop(); hero.classList.remove('storming');
-    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (!hero.classList.contains('storming')) stormEl.querySelectorAll('.drop').forEach(x => x.remove()); }, 1000); };
+  return () => { ts.forEach(clearTimeout); gustT.forEach(clearTimeout); if (rb) rb.classList.remove('gust'); const frg2 = $('#frontrain'); if (frg2) frg2.classList.remove('gust'); simStop && simStop(); hero.classList.remove('storming');
+    const ag = $('#afterglow'); if (ag) { hero.classList.add('clearing'); restart(ag, 'go'); setTimeout(() => hero.classList.remove('clearing'), 1900); } setTimeout(() => { if (sid !== stormSeq || hero.classList.contains('storming')) return; stormEl.querySelectorAll('.drop').forEach(x => x.remove()); const fr = $('#frontrain'); if (fr) fr.replaceChildren(); }, 1000); };
 };
 // crest click: name scrambles into Hangul and back
 if (logoWrap) {
@@ -342,6 +385,7 @@ if (logoWrap) {
     setTimeout(() => {
     const endStorm = storm();
     ws.forEach(w => { w.style.animation = 'none'; w.style.opacity = 1; w.style.transform = 'none'; });
+    h1.style.minHeight = h1.offsetHeight + 'px'; // lock height so the crest doesn't shift when the name swaps
     h1.classList.add('ko');
     scrambleText(ws[0], '마이클', 900, null, hangul);
     scrambleText(ws[1], '스콰이어스', 1200, () => setTimeout(() => {
@@ -355,7 +399,7 @@ if (logoWrap) {
         setTimeout(() => hero.classList.remove('waking'), reduce ? 0 : 3600);
       }, 600);
       scrambleText(ws[0], 'Michael', 900, () => h1.classList.remove('ko'));
-      scrambleText(ws[1], 'Squires', 1100, () => { ws.forEach(w => { w.style.animation = 'shine 6s ease-in-out infinite'; w.style.opacity = ''; w.style.transform = ''; }); setTimeout(() => busy = false, 3000); });
+      scrambleText(ws[1], 'Squires', 1100, () => { ws.forEach(w => { w.style.animation = 'shine 6s ease-in-out infinite'; w.style.opacity = ''; w.style.transform = ''; }); setTimeout(() => busy = false, 3000); setTimeout(() => h1.style.minHeight = '', 600); });
     }, 7000), hangul);
     }, reduce ? 0 : lidOpen);
   });
@@ -396,5 +440,8 @@ if (em) { const show = scrambleLink(em); new IntersectionObserver((es, o) => { i
 const navEm = $('#navEmail');
 const navShow = navEm ? scrambleLink(navEm, { dur: 1100 }) : null;
 if (navShow) setTimeout(navShow, reduce ? 0 : 1500);
+// pause looping animations in sections that aren't visible (saves battery on phones)
+const pauser = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('paused', !e.isIntersecting)), { rootMargin: '100px 0px' });
+['.hero', '.marquee', '.contact'].forEach(s => { const el = $(s); if (el) pauser.observe(el); });
 frame();
 })();
