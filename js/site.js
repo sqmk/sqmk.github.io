@@ -250,32 +250,33 @@ const storm = () => {
     b.style.left = (hx0 + 28.4 * vh - 8 - fr.left) + 'px'; b.style.setProperty('--w', wait.toFixed(2) + 's'); front.appendChild(b);
     // a zero-size marker at the fireball's head gives its true on-screen position every frame
     const head = document.createElement('b'); head.style.cssText = 'position:absolute;left:50%;bottom:-12px;width:0;height:0'; b.appendChild(head);
-    let pHit = 2;
     // correct the aim from real measurements: the estimate above assumes innerHeight === 1vh*100, which isn't true on
     // iOS Safari (vh is the toolbar-hidden height) and drifts with the hero's scroll parallax. measure the head's actual
     // start point and the real flight direction (-170vh, 189vh), then slide the meteor sideways so its line hits the target.
     { const pr = document.createElement('i'); pr.style.cssText = 'position:fixed;top:0;height:100vh;width:0;visibility:hidden'; document.body.appendChild(pr); const cvh = pr.getBoundingClientRect().height / 100; pr.remove();
-      const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh; pHit = (ty - h0.top) / dy; // flight is linear in the animation's progress, so this is when the head reaches the target
+      const h0 = head.getBoundingClientRect(), dx = -170 * cvh, dy = 189 * cvh;
       const off = (tx - h0.left) - (ty - h0.top) * dx / dy;
       if (isFinite(off)) b.style.left = (parseFloat(b.style.left) + off) + 'px'; }
     const ml = layer ? null : meteorLight, anim = b.getAnimations && b.getAnimations()[0]; // meteors behind the emblem don't light it
     let hit = false, fno = 0, crc = null;
     // the strike always lands on its target point, however it's triggered (position check, progress check, or the flight ending)
-    const doHit = () => { if (hit || !crestEl || !hero.classList.contains('storming')) { if (!hit) b.remove(); return; } hit = true; if (anim) anim.pause(); b.classList.add('hit');
+    const doHit = (hx, hy) => { if (hit || !crestEl || !hero.classList.contains('storming')) { if (!hit) b.remove(); return; } hit = true; if (anim) anim.pause(); b.classList.add('hit');
       const cr = crestEl.getBoundingClientRect();
       // the head is spent on impact, but its burning trail hangs in the air and fades out
       b.animate([{ opacity: 1, filter: 'brightness(1.4)' }, { opacity: .8, filter: 'brightness(1)', offset: .2 }, { opacity: 0, filter: 'brightness(.7)' }], { duration: 1400, easing: 'ease-out', fill: 'forwards' }).onfinish = () => b.remove(); if (ml) ml.style.opacity = 0;
-      impact(ax * 100, ay * 100, cr.left + cr.width * ax, cr.top + cr.height * ay, mega ? 2.5 : 1); if (onHit) onHit(); };
+      // land where the head actually is (the crest may have moved since launch); fall back to the aim point if the head was never measured
+      const sx = hx ?? cr.left + cr.width * ax, sy = hy ?? cr.top + cr.height * ay;
+      impact((sx - cr.left) / cr.width * 100, (sy - cr.top) / cr.height * 100, sx, sy, mega ? 2.5 : 1); if (onHit) onHit(); };
     // on slow phones a frame can skip past the crest, or the flight can end between frames: never let a strike go missing
     b.addEventListener('animationend', () => { if (strike && !hit) doHit(); else if (!hit) b.remove(); });
     if (!anim || !crestEl) { if (strike) setTimeout(doHit, (wait + (mega ? .75 : .6) * .85) * 1000); return; }
     const tick = () => {
       if (!b.isConnected || hit || !hero.classList.contains('storming')) { if (ml && !hit) ml.style.opacity = 0; return; }
-      if (strike && anim.playState === 'finished') { doHit(); return; }
+      if (strike && anim.playState === 'finished') { doHit(); return; } // flew past between frames: land on the aim point
       const p = anim.effect.getComputedTiming().progress;
       if (p != null && p > .04) { const hr = head.getBoundingClientRect(); if (!crc || fno % 12 === 0) crc = crestEl.getBoundingClientRect(); const cr = crc, x = hr.left, y = hr.top; fno++;
         const lx = (x - cr.left) / cr.width * 100, ly = (y - cr.top) / cr.height * 100, d = Math.hypot((lx - 50) / 100, (ly - 50) / 100);
-        if (strike && (y >= cr.top + cr.height * ay || p >= pHit)) { doHit(); return; }
+        if (strike && y >= cr.top + cr.height * ay) { doHit(x, y); return; }
         if (ml && fno % 2 === 0) { const o = Math.max(0, Math.min(1, (.75 - d) / .4)); if (o > 0 || ml._o > 0) { ml.style.setProperty('--mlx', lx.toFixed(1) + '%'); ml.style.setProperty('--mly', ly.toFixed(1) + '%'); ml.style.opacity = o.toFixed(3); } ml._o = o; }
       } else if (ml) ml.style.opacity = 0;
       requestAnimationFrame(tick); };
